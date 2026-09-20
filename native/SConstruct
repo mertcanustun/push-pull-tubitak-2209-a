@@ -1,0 +1,45 @@
+#!/usr/bin/env python
+#
+# MuJoCo GDExtension build betigi.
+#
+# Kullanim:
+#   cd native
+#   scons target=template_debug MUJOCO=/tam/yol/mujoco-3.x.x
+#
+# MUJOCO klasoru su yapida olmali (resmi surumler boyledir):
+#   mujoco-3.x.x/include/mujoco/mujoco.h
+#   mujoco-3.x.x/lib/libmujoco.so   (Linux)
+#   mujoco-3.x.x/bin/mujoco.dll + lib/mujoco.lib   (Windows)
+#   mujoco-3.x.x/lib/libmujoco.dylib  (macOS)
+
+import os
+
+env = SConscript("godot-cpp/SConstruct", {"api_version": "4.3"})
+
+mujoco_root = ARGUMENTS.get("MUJOCO", os.environ.get("MUJOCO_DIR", ""))
+if not mujoco_root:
+    raise SystemExit(
+        "MuJoCo klasoru verilmedi.\n"
+        "Ornek: scons target=template_debug MUJOCO=/home/kullanici/mujoco-3.2.0"
+    )
+
+env.Append(CPPPATH=[os.path.join(mujoco_root, "include")])
+env.Append(LIBPATH=[os.path.join(mujoco_root, "lib")])
+
+if env["platform"] == "windows":
+    env.Append(LIBS=["mujoco"])
+else:
+    env.Append(LIBS=["mujoco"])
+    # Calisma aninda .so/.dylib yaninda aransin.
+    env.Append(LINKFLAGS=["-Wl,-rpath,$ORIGIN"])
+
+env.Append(CPPPATH=["src/"])
+sources = Glob("src/*.cpp")
+
+lib_name = "libmujoco_godot{}{}".format(env["suffix"], env["SHLIBSUFFIX"])
+library = env.SharedLibrary(
+    "../addons/mujoco/bin/{}".format(lib_name),
+    source=sources,
+)
+
+Default(library)

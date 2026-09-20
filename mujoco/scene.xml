@@ -1,0 +1,65 @@
+<!--
+  MuJoCo modeli - Etki/Tepki sahnesi.
+
+  ONEMLI: MuJoCo Z-yukari, Godot Y-yukari calisir. Donusum C++ tarafinda
+  (mujoco_world.cpp icindeki to_godot / to_mujoco) yapilir. Bu dosyada
+  her sey MuJoCo eksenlerindedir: yukari yon = +Z.
+
+  Iki top:
+    ball_left  - carpisma ACIK  (contype/conaffinity = 1)
+    ball_right - carpisma KAPALI (contype/conaffinity = 0)
+                 -> yercekimi ve hava surtunmesi hala etki eder,
+                    ama zeminle temas cozulmez. Senaryo planindaki istek bu.
+  Sagdaki topun temas kapatmasi calisma zamaninda da
+  set_body_contacts_enabled() ile degistirilebilir.
+-->
+<mujoco model="reaction_sim">
+
+  <!--
+    density = 1.225 kg/m^3  -> MuJoCo'nun kendi akiskan modeli hava
+    surtunmesini uretir. Ayrica bir surtunme kuvveti EKLEMIYORUZ; plan
+    geregi surtunme motorun isi.
+  -->
+  <option timestep="0.0002"
+          gravity="0 0 -9.81"
+          density="1.225"
+          viscosity="0"
+          integrator="implicitfast"
+          />
+
+  <compiler angle="degree" autolimits="true"/>
+
+  <default>
+    <!--
+      solref="-k -d": eksi isaret dogrudan yay-sonum katsayisi demektir.
+      k = 1e5 N/m, d = 45 N*s/m  -> geri tepme ~0.76 (basketbol).
+      NativeBackend ile ayni degerler, boylece iki arka uc ayni davranir.
+    -->
+    <geom solref="-100000 -45" solimp="0.95 0.99 0.001" friction="0.8 0.01 0.001"/>
+  </default>
+
+  <worldbody>
+    <geom name="floor" type="plane" size="6 4 0.1" pos="0 0 0" contype="1" conaffinity="1"/>
+
+    <body name="ball_left" pos="-2.2 0 3.0">
+      <freejoint name="ball_left_free"/>
+      <!--
+        fluidshape="ellipsoid" + fluidcoef ilk terimi = kut cisim surukleme
+        katsayisi. Kure icin 0.47.
+      -->
+      <geom name="ball_left_geom" type="sphere" size="0.119" mass="0.624"
+            contype="1" conaffinity="1"
+            fluidshape="ellipsoid" fluidcoef="0.47 0.25 1.5 1.0 1.0"
+            rgba="0.84 0.40 0.15 1"/>
+    </body>
+
+    <body name="ball_right" pos="2.2 0 3.0">
+      <freejoint name="ball_right_free"/>
+      <geom name="ball_right_geom" type="sphere" size="0.119" mass="0.624"
+            contype="0" conaffinity="0"
+            fluidshape="ellipsoid" fluidcoef="0.47 0.25 1.5 1.0 1.0"
+            rgba="0.84 0.40 0.15 1"/>
+    </body>
+  </worldbody>
+
+</mujoco>

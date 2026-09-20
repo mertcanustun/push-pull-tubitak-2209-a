@@ -1,0 +1,27 @@
+[configuration]
+
+entry_symbol = "mujoco_library_init"
+compatibility_minimum = "4.3"
+
+[libraries]
+
+; SCons ciktisi bu adlarla "bin/" klasorune duser.
+; Derlemedigin platformlarin satirini silmene gerek yok - dosya yoksa
+; Godot o platformda eklentiyi yuklemez, proje yedek fizikle calisir.
+
+linux.debug.x86_64   = "res://addons/mujoco/bin/libmujoco_godot.linux.template_debug.x86_64.so"
+linux.release.x86_64 = "res://addons/mujoco/bin/libmujoco_godot.linux.template_release.x86_64.so"
+
+windows.debug.x86_64   = "res://addons/mujoco/bin/libmujoco_godot.windows.template_debug.x86_64.dll"
+windows.release.x86_64 = "res://addons/mujoco/bin/libmujoco_godot.windows.template_release.x86_64.dll"
+
+macos.debug   = "res://addons/mujoco/bin/libmujoco_godot.macos.template_debug.framework"
+macos.release = "res://addons/mujoco/bin/libmujoco_godot.macos.template_release.framework"
+
+[dependencies]
+
+; MuJoCo'nun kendi paylasimli kutuphanesi de .dll/.so ile ayni klasorde olmali.
+linux.debug.x86_64   = { "res://addons/mujoco/bin/libmujoco.so.3.10.0" : "" }
+linux.release.x86_64 = { "res://addons/mujoco/bin/libmujoco.so.3.10.0" : "" }
+windows.debug.x86_64   = { "res://addons/mujoco/bin/mujoco.dll" : "" }
+windows.release.x86_64 = { "res://addons/mujoco/bin/mujoco.dll" : "" }

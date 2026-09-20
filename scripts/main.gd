@@ -72,7 +72,13 @@ var drag_arrow: ForceArrow
 
 
 func _ready() -> void:
-	_build_environment()
+	# Sabit dekor (ortam, gunes, kamera, zemin, ayirici, cetveller) artik
+	# scenes/main.tscn icinde gercek node olarak duruyor - editorden duzenlenir.
+	# Burada sadece sahneden kameraya referans aliyor ve dinamik surukleme
+	# okunu kuruyoruz.
+	camera = $Camera3D
+	drag_arrow = ForceArrow.new(Color(1.0, 1.0, 1.0), "surukle")
+	add_child(drag_arrow)
 	_build_hud()
 	_build_backend()
 	_build_balls()
@@ -80,99 +86,6 @@ func _ready() -> void:
 
 
 # ------------------------------------------------------------------ kurulum
-
-func _build_environment() -> void:
-	var env := Environment.new()
-	env.background_mode = Environment.BG_SKY
-	var sky := Sky.new()
-	var sky_mat := ProceduralSkyMaterial.new()
-	sky_mat.sky_top_color = Color(0.07, 0.09, 0.14)
-	sky_mat.sky_horizon_color = Color(0.16, 0.18, 0.24)
-	sky_mat.ground_bottom_color = Color(0.05, 0.05, 0.07)
-	sky_mat.ground_horizon_color = Color(0.14, 0.15, 0.19)
-	sky.sky_material = sky_mat
-	env.sky = sky
-	env.ambient_light_source = Environment.AMBIENT_SOURCE_SKY
-	env.ambient_light_energy = 0.6
-	env.tonemap_mode = Environment.TONE_MAPPER_FILMIC
-	var we := WorldEnvironment.new()
-	we.environment = env
-	add_child(we)
-
-	var sun := DirectionalLight3D.new()
-	sun.rotation_degrees = Vector3(-52, -38, 0)
-	sun.light_energy = 1.15
-	sun.shadow_enabled = true
-	add_child(sun)
-
-	camera = Camera3D.new()
-	camera.position = Vector3(0.0, 1.62, 4.7)
-	camera.look_at_from_position(Vector3(0.0, 1.62, 4.7), Vector3(0.0, 1.38, 0.0), Vector3.UP)
-	camera.fov = 54.0
-	add_child(camera)
-
-	# --- zemin: iki ayri plaka, ortada ayirici --------------------------
-	_add_ground(-HALF_X, Color(0.20, 0.30, 0.42))
-	_add_ground(HALF_X, Color(0.42, 0.30, 0.20))
-
-	var divider := MeshInstance3D.new()
-	var dm := BoxMesh.new()
-	dm.size = Vector3(0.025, 4.2, 2.2)
-	divider.mesh = dm
-	divider.position = Vector3(0.0, 2.1, 0.0)
-	var dmat := StandardMaterial3D.new()
-	dmat.albedo_color = Color(1, 1, 1, 0.055)
-	dmat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	dmat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	divider.material_override = dmat
-	divider.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(divider)
-
-	# Cetveller ortada, ayiricinin iki yaninda: panellerin arkasinda kalmazlar.
-	_add_height_ruler(-0.62)
-	_add_height_ruler(0.62)
-
-	drag_arrow = ForceArrow.new(Color(1.0, 1.0, 1.0), "surukle")
-	add_child(drag_arrow)
-
-
-func _add_ground(x: float, tint: Color) -> void:
-	var slab := MeshInstance3D.new()
-	var bm := BoxMesh.new()
-	bm.size = Vector3(3.1, 0.18, 2.2)
-	slab.mesh = bm
-	slab.position = Vector3(x, GROUND_Y - 0.09, 0.0)
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = tint
-	mat.roughness = 0.92
-	slab.material_override = mat
-	add_child(slab)
-
-
-func _add_height_ruler(x: float) -> void:
-	var sign_x: float = signf(x)
-	for m in range(1, 4):
-		var tick := MeshInstance3D.new()
-		var bm := BoxMesh.new()
-		bm.size = Vector3(0.44, 0.014, 0.014)
-		tick.mesh = bm
-		tick.position = Vector3(x + sign_x * 0.22, float(m), 0.0)
-		var mat := StandardMaterial3D.new()
-		mat.albedo_color = Color(1, 1, 1, 0.35)
-		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-		tick.material_override = mat
-		tick.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-		add_child(tick)
-
-		var lbl := Label3D.new()
-		lbl.text = "%d m" % m
-		lbl.font_size = 40
-		lbl.pixel_size = 0.0028
-		lbl.modulate = Color(1, 1, 1, 0.5)
-		lbl.billboard = BaseMaterial3D.BILLBOARD_ENABLED
-		lbl.position = Vector3(x + sign_x * 0.16, float(m) + 0.13, 0.0)
-		add_child(lbl)
-
 
 func _build_hud() -> void:
 	hud = Hud.new()

@@ -1,6 +1,198 @@
-[gd_scene format=3 uid="uid://8ui3nrul1tp3"]
+[gd_scene load_steps=23 format=3]
 
-[ext_resource type="Script" uid="uid://dpvonyu2l0qij" path="res://scripts/main.gd" id="1_main"]
+[ext_resource type="Script" path="res://scripts/main.gd" id="1_o5qli"]
 
-[node name="Main" type="Node3D" unique_id=851579936]
-script = ExtResource("1_main")
+[sub_resource type="ProceduralSkyMaterial" id="ProceduralSkyMaterial_0wfyh"]
+sky_top_color = Color(0.07, 0.09, 0.14, 1)
+sky_horizon_color = Color(0.16, 0.18, 0.24, 1)
+ground_bottom_color = Color(0.05, 0.05, 0.07, 1)
+ground_horizon_color = Color(0.14, 0.15, 0.19, 1)
+
+[sub_resource type="Sky" id="Sky_sugp2"]
+sky_material = SubResource("ProceduralSkyMaterial_0wfyh")
+
+[sub_resource type="Environment" id="Environment_jyhfs"]
+background_mode = 2
+sky = SubResource("Sky_sugp2")
+ambient_light_source = 3
+ambient_light_energy = 0.6
+tonemap_mode = 2
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_tbgi4"]
+albedo_color = Color(0.2, 0.3, 0.42, 1)
+roughness = 0.92
+
+[sub_resource type="BoxMesh" id="BoxMesh_tefeu"]
+size = Vector3(3.1, 0.18, 2.2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_o6xl0"]
+albedo_color = Color(0.42, 0.3, 0.2, 1)
+roughness = 0.92
+
+[sub_resource type="BoxMesh" id="BoxMesh_tipki"]
+size = Vector3(3.1, 0.18, 2.2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_85g3d"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(1, 1, 1, 0.055)
+
+[sub_resource type="BoxMesh" id="BoxMesh_choun"]
+size = Vector3(0.025, 4.2, 2.2)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_ya4ey"]
+shading_mode = 0
+albedo_color = Color(1, 1, 1, 0.35)
+
+[sub_resource type="BoxMesh" id="BoxMesh_eb6dy"]
+size = Vector3(0.44, 0.014, 0.014)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_trceg"]
+shading_mode = 0
+albedo_color = Color(1, 1, 1, 0.35)
+
+[sub_resource type="BoxMesh" id="BoxMesh_a8y0u"]
+size = Vector3(0.44, 0.014, 0.014)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_jkv2x"]
+shading_mode = 0
+albedo_color = Color(1, 1, 1, 0.35)
+
+[sub_resource type="BoxMesh" id="BoxMesh_jbj1t"]
+size = Vector3(0.44, 0.014, 0.014)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_muem4"]
+shading_mode = 0
+albedo_color = Color(1, 1, 1, 0.35)
+
+[sub_resource type="BoxMesh" id="BoxMesh_dp3eg"]
+size = Vector3(0.44, 0.014, 0.014)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_0ld40"]
+shading_mode = 0
+albedo_color = Color(1, 1, 1, 0.35)
+
+[sub_resource type="BoxMesh" id="BoxMesh_gqmmt"]
+size = Vector3(0.44, 0.014, 0.014)
+
+[sub_resource type="StandardMaterial3D" id="StandardMaterial3D_yc10j"]
+shading_mode = 0
+albedo_color = Color(1, 1, 1, 0.35)
+
+[sub_resource type="BoxMesh" id="BoxMesh_jscy8"]
+size = Vector3(0.44, 0.014, 0.014)
+
+[node name="Main" type="Node3D"]
+script = ExtResource("1_o5qli")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Environment_jyhfs")
+
+[node name="Sun" type="DirectionalLight3D" parent="."]
+transform = Transform3D(0.7880108, 0.48514786, -0.37903908, 0, 0.6156615, 0.7880107, 0.6156615, -0.62096095, 0.4851479, 0, 0, 0)
+light_energy = 1.15
+shadow_enabled = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.9986988, 0.050997388, 0, -0.050997388, 0.9986988, 0, 1.62, 4.7)
+fov = 54.0
+
+[node name="GroundLeft" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8, -0.09, 0)
+material_override = SubResource("StandardMaterial3D_tbgi4")
+mesh = SubResource("BoxMesh_tefeu")
+
+[node name="GroundRight" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, -0.09, 0)
+material_override = SubResource("StandardMaterial3D_o6xl0")
+mesh = SubResource("BoxMesh_tipki")
+
+[node name="Divider" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2.1, 0)
+material_override = SubResource("StandardMaterial3D_85g3d")
+cast_shadow = 0
+mesh = SubResource("BoxMesh_choun")
+
+[node name="RulerLeft_Tick1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.84, 1, 0)
+material_override = SubResource("StandardMaterial3D_ya4ey")
+cast_shadow = 0
+mesh = SubResource("BoxMesh_eb6dy")
+
+[node name="RulerLeft_Label1" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, 1.13, 0)
+pixel_size = 0.0028
+billboard = 1
+modulate = Color(1, 1, 1, 0.5)
+text = "1 m"
+font_size = 40
+
+[node name="RulerLeft_Tick2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.84, 2, 0)
+material_override = SubResource("StandardMaterial3D_trceg")
+cast_shadow = 0
+mesh = SubResource("BoxMesh_a8y0u")
+
+[node name="RulerLeft_Label2" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, 2.13, 0)
+pixel_size = 0.0028
+billboard = 1
+modulate = Color(1, 1, 1, 0.5)
+text = "2 m"
+font_size = 40
+
+[node name="RulerLeft_Tick3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.84, 3, 0)
+material_override = SubResource("StandardMaterial3D_jkv2x")
+cast_shadow = 0
+mesh = SubResource("BoxMesh_jbj1t")
+
+[node name="RulerLeft_Label3" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, 3.13, 0)
+pixel_size = 0.0028
+billboard = 1
+modulate = Color(1, 1, 1, 0.5)
+text = "3 m"
+font_size = 40
+
+[node name="RulerRight_Tick1" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.84, 1, 0)
+material_override = SubResource("StandardMaterial3D_muem4")
+cast_shadow = 0
+mesh = SubResource("BoxMesh_dp3eg")
+
+[node name="RulerRight_Label1" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, 1.13, 0)
+pixel_size = 0.0028
+billboard = 1
+modulate = Color(1, 1, 1, 0.5)
+text = "1 m"
+font_size = 40
+
+[node name="RulerRight_Tick2" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.84, 2, 0)
+material_override = SubResource("StandardMaterial3D_0ld40")
+cast_shadow = 0
+mesh = SubResource("BoxMesh_gqmmt")
+
+[node name="RulerRight_Label2" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, 2.13, 0)
+pixel_size = 0.0028
+billboard = 1
+modulate = Color(1, 1, 1, 0.5)
+text = "2 m"
+font_size = 40
+
+[node name="RulerRight_Tick3" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.84, 3, 0)
+material_override = SubResource("StandardMaterial3D_yc10j")
+cast_shadow = 0
+mesh = SubResource("BoxMesh_jscy8")
+
+[node name="RulerRight_Label3" type="Label3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, 3.13, 0)
+pixel_size = 0.0028
+billboard = 1
+modulate = Color(1, 1, 1, 0.5)
+text = "3 m"
+font_size = 40

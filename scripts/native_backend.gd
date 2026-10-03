@@ -13,6 +13,9 @@ const SUBSTEPS := 40            # 60 FPS'te h = 0.4 ms, temas suresi ~8 ms
 var _state: Dictionary = {}     # id -> BodyState
 var _stiffness: Dictionary = {} # id -> float (N/m)
 var _damping: Dictionary = {}   # id -> float (N*s/m)
+var _mirror_src := ""
+var _mirror_dst := ""
+var _ext: Dictionary = {}       # id -> Vector3 — UYGULANAN dis kuvvet (state.f_external yalniz ekran icin)
 
 
 func backend_name() -> String:
@@ -42,17 +45,27 @@ func _reset_body(spec: PhysicsBackend.BodySpec) -> void:
 	s.mass = spec.mass
 	s.f_gravity = spec.mass * PhysicsBackend.GRAVITY
 	_state[spec.id] = s
+	_ext.erase(spec.id)
 
 
 func reset() -> void:
+	_mirror_src = ""
+	_mirror_dst = ""
 	for id in _specs:
 		_reset_body(_specs[id])
+
+
+func set_contact_mirror(source: String, target: String) -> bool:
+	_mirror_src = source
+	_mirror_dst = target
+	return true
 
 
 func set_external_force(id: String, force: Vector3) -> void:
 	var s: PhysicsBackend.BodyState = _state.get(id)
 	if s:
 		s.f_external = force
+		_ext[id] = force
 
 func set_position(id: String, pos: Vector3) -> void:
 	var s: PhysicsBackend.BodyState = _state.get(id)
@@ -70,6 +83,10 @@ func get_state(id: String) -> PhysicsBackend.BodyState:
 
 func step(dt: float) -> void:
 	var h := dt / float(SUBSTEPS)
+	# (a) aynalama: kaynak cismin her alt adimdaki temas kuvveti; hedef cisim
+	# ayni alt adimda aynisini alir. Kaynagin once islenmesi gerekir —
+	# main.gd "left"i "right"tan once ekliyor, sozluk sirasi bunu korur.
+	var mirror_fc: Array = []
 	for id in _specs:
 		var spec: PhysicsBackend.BodySpec = _specs[id]
 		var s: PhysicsBackend.BodyState = _state[id]
@@ -78,6 +95,7 @@ func step(dt: float) -> void:
 		var v_before := s.velocity
 		s.just_hit_ground = false
 		var impulse := 0.0
+		var mirror_impulse := 0.0
 		var contact_peak := Vector3.ZERO
 		var touching := false
 
@@ -108,7 +126,13 @@ func step(dt: float) -> void:
 					s.contact_duration += h
 					s.contact_peak = maxf(s.contact_peak, fn)
 
-			var f_total := f_g + f_d + f_c + s.f_external
+			if id == _mirror_src:
+				mirror_fc.append(f_c)
+			var f_m := Vector3.ZERO
+			if id == _mirror_dst and i < mirror_fc.size():
+				f_m = mirror_fc[i]
+				mirror_impulse += f_m.y * h
+			var f_total := f_g + f_d + f_c + (_ext.get(id, Vector3.ZERO) as Vector3) + f_m
 			var accel := f_total / spec.mass
 			# yari-ortuk Euler: once hiz, sonra konum (enerji acisindan kararli)
 			s.velocity += accel * h
@@ -124,6 +148,11 @@ func step(dt: float) -> void:
 		else:
 			s.f_contact = Vector3.ZERO
 
+		if id == _mirror_dst:
+			# ekranda: sagdaki topa uygulanan kuvvet (kare ortalamasi). Yalnizca
+			# gosterim — entegrasyon _ext'i kullanir, yoksa bir sonraki karede
+			# ayni kuvvet iki kez uygulanirdi.
+			s.f_external = Vector3(0.0, mirror_impulse / dt, 0.0) if dt > 0.0 else Vector3.ZERO
 		s.touching_ground = touching
 		s.contact_impulse = impulse
 		s.just_hit_ground = touching and not was_touching

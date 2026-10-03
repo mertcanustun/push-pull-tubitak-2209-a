@@ -44,6 +44,11 @@ godot --headless --path . --fixed-fps 60 --script tools/motor_karsilastirma.gd
 | Yedek Çözücü | 1195 | ~200 m |
 | Godot Melez | 1202 | ~200 m |
 
+(a) seçeneğinde sağdaki top, soldakinin zeminden aldığı temas kuvvetinin **aynısını, aynı
+adımda** alıyor (`PhysicsBackend.set_contact_mirror`). Böylece iki top birebir aynı hareket
+ediyor. Godot Melez'de sekme tepeleri sol/sağ 1.572 / 1.572, 0.838 / 0.838, 0.463 / 0.463 m;
+iki topun konum farkı en kötü anda 0.0 mm. Yedek Çözücü'de de iki top birebir aynı.
+
 Kabul ölçütü (≥ 15 temas adımı; Yedek Çözücü ile birkaç % içinde) sağlanıyor.
 
 ## Farkın kaynağı: adım büyüklüğü
@@ -76,6 +81,11 @@ bir adım kadar (0.42 ms).
    uygulanıyordu. Artık dış kuvvet, biten adım için **impuls** (F × gerçek adım süresi)
    olarak veriliyor; Fnet de iki ardışık geri çağrı arasındaki hız farkından ölçülüyor.
    (1. hata da aslında bu kaymanın bir yüzüydü.)
+4. **(a)'da soldaki top hep biraz önce yere değiyordu.** Sağdaki top tutulup tahmini bir
+   impulsla fırlatılıyordu (yerçekimi ve temasın şekli hesaba katılmadan). Artık sağdaki
+   top soldakinin temas kuvvetini motorun içinde, aynı adımda alıyor; fark 0.0 ms.
+   Bu sırada ortaya çıkan bir yan etki de düzeltildi: temasın dip noktasında hız ~0 olduğu
+   için ağır çekim bir kare kapanıyordu (2. hatadaki "bastırma" koşulu artık tüm motorlarda).
 
 ## Ekran görüntüleri
 

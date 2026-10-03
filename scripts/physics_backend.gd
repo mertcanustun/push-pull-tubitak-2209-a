@@ -111,6 +111,13 @@ func engine_driven() -> bool:
 func set_running(_on: bool) -> void:
 	pass
 
+## (a) secenegi: target cismine, source cisminin zeminden aldigi temas
+## kuvvetinin AYNISI, AYNI adimda ve ayni bicimde (kuvvet olarak) uygulanir.
+## Bos id'ler kapatir. Destekleyen arka uc true doner; desteklemeyende main.gd
+## dis kuvvetle yaklasik aynalar. reset() aynalamayi kapatir.
+func set_contact_mirror(_source: String, _target: String) -> bool:
+	return false
+
 ## Arka uc degistirilirken / sahne kapanirken cagrilir; global ayarlari
 ## (Engine.time_scale vb.) geri almak icin.
 func shutdown() -> void:

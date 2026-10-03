@@ -45,6 +45,8 @@ var _stiffness: Dictionary = {}
 var _damping: Dictionary = {}
 var _in_contact: Dictionary = {} # id -> bool (son geri çağrıda temas kuvveti verildi mi)
 var _v_prev: Dictionary = {}     # id -> Vector3 (önceki geri çağrıdaki hız, Fnet için)
+var _mirror_src := ""
+var _mirror_dst := ""
 var _active := true
 var _saved_ticks := 60
 
@@ -111,9 +113,17 @@ func _reset_body(spec: PhysicsBackend.BodySpec) -> void:
 
 
 func reset() -> void:
+	_mirror_src = ""
+	_mirror_dst = ""
 	for id in _specs:
 		_reset_body(_specs[id])
 	set_running(false)
+
+
+func set_contact_mirror(source: String, target: String) -> bool:
+	_mirror_src = source
+	_mirror_dst = target
+	return true
 
 
 ## Yay-sönüm temas kuvveti (yalnızca dikey). Konum/hız verilen cisim için.
@@ -233,7 +243,18 @@ func _integrate(id: String, st: PhysicsDirectBodyState3D) -> void:
 			s.contact_step_count, s.contact_duration * 1000.0, s.contact_peak])
 	_in_contact[id] = touching
 
-	st.apply_central_force(f_d + f_c)
+	# (a) aynalama: kaynak topun BU turdaki temas kuvveti — kaynağın durumunu
+	# doğrudan fizik sunucusundan okuyoruz ki geri çağrı sırası önemli olmasın.
+	var f_m := Vector3.ZERO
+	if id == _mirror_dst and _mirror_src != "":
+		var src: RigidBody3D = _bodies[_mirror_src]
+		var ss := PhysicsServer3D.body_get_direct_state(src.get_rid())
+		if ss:
+			var sv := ss.linear_velocity + (_ext[_mirror_src] as Vector3) * ss.step / src.mass
+			f_m = Vector3(0.0, _contact_force(_mirror_src, ss.transform.origin, sv), 0.0)
+		f_e = f_m   # ekranda: sağdaki topa uygulanan kuvvet
+
+	st.apply_central_force(f_d + f_c + f_m)
 
 	_pending[id] = {
 		"p": p, "v": v, "f_net": f_net, "f_d": f_d, "f_c": f_c, "f_e": f_e,

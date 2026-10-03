@@ -65,13 +65,14 @@ var hold_pos := Vector3.ZERO
 var show_pair := false
 ## Temas tetigi hazir mi (top zeminden ayrildiktan sonra kurulur)
 var right_armed := true
-## (a) secenegi soldaki ziplamayla BIREBIR ayni olsun diye: sagdaki top
-## soldakinin temasi bitene kadar bekletilir, sonra tam ayni cikis hizini
-## verecek impuls uygulanir. Sonraki temaslarda olculen e degeri kullanilir.
-var pending_match := false
-var match_wait := 0.0
-var e_measured := 0.0
-var left_was_touching := false
+## (a) secenegi: sagdaki topa her adimda, soldaki topun zeminden aldigi
+## kuvvetin BIREBIR aynisi uygulanir ("zemin topa, topun ona uyguladigi
+## kuvvete esit kuvvetle karsilik verir"). Iki top ayni yukseklikten, ayni
+## yercekimi ve hava direnciyle dustugu icin yorungeleri ayni olur.
+## (Eskiden sagdaki top bekletilip tahmini bir impuls veriliyordu; yercekimi
+## hesaba katilmadigi ve e yanlis olculdugu icin her sekmede kayiyordu.)
+var _mirror_a := false
+var _mirror_native := false   # arka uc aynalamayi kendisi yapiyor mu
 var left_enter_speed := 0.0
 
 var arrow_on := {
@@ -216,10 +217,8 @@ func reset_sim() -> void:
 	impulse_force = 0.0
 	_applied_f = 0.0
 	_zero_ext_next = false
-	pending_match = false
-	match_wait = 0.0
-	e_measured = 0.0
-	left_was_touching = false
+	_mirror_a = false
+	_mirror_native = false
 	left_enter_speed = 0.0
 	hold_right = false
 	hold_pos = Vector3.ZERO
@@ -305,6 +304,12 @@ func _physics_process_engine(delta: float) -> void:
 ## kucultulur ki toplam impuls tam olarak J = m*v*(1+e) olsun.
 func _pre_step(step: float) -> void:
 	_applied_f = 0.0
+	if _mirror_a:
+		if not _mirror_native:
+			# Arka uc aynalamayi kendisi yapmiyorsa: dis kuvvetle yaklasik
+			var n := backend.get_state("left").f_contact.y
+			backend.set_external_force("right", Vector3(0.0, n, 0.0))
+		return
 	if _zero_ext_next:
 		# Godot Melez: impuls bir onceki tikte bitti; son parca o tikin motor
 		# adiminda uygulandi, simdi kuvveti kaldir (bkz. _after_step).
@@ -319,19 +324,18 @@ func _pre_step(step: float) -> void:
 ## yaklasirken zaman otomatik yavaslar.
 func _slowmo() -> float:
 	var f := 1.0
-	var engine := backend.engine_driven()
 	for side in ["left", "right"]:
 		var s := backend.get_state(side)
 		if s == null:
 			continue
 		var gap: float = s.position.y - cfg.radius - GROUND_Y
 		var fast := absf(s.velocity.y) > 0.6
-		# Godot Melez: temasin dip noktasinda hiz ~0 oldugu icin "fast" bir an
-		# duser; motor o an TEK bir buyuk adim (8 ms) atar ve temas bozulur.
-		# Bu modda temas kuvveti agirliktan belirgin buyukken de yavas kal
-		# (top yerde dururken N ~ m·g oldugu icin orada normal hiza doner).
-		# Diger modlarda davranis eskisiyle ayni.
-		var pressing: bool = engine and s.touching_ground \
+		# Temasin dip noktasinda hiz ~0 oldugu icin "fast" bir an duser ve
+		# o kare normal hizda (tek buyuk adim) gecer: Godot Melez'de temas
+		# bozulur, diger motorlarda agir cekim bir kare titrer. Temas kuvveti
+		# agirliktan belirgin buyukken de yavas kal (top yerde dururken
+		# N ~ m·g oldugu icin orada normal hiza doner).
+		var pressing: bool = s.touching_ground \
 				and s.f_contact.y > 3.0 * s.mass * PhysicsBackend.GRAVITY.length()
 		if (s.touching_ground and (fast or pressing)) or (gap < 0.30 and s.velocity.y < -0.6):
 			f = cfg.agir_cekim_carpani
@@ -355,29 +359,14 @@ func _after_step(step: float) -> void:
 	if sl.just_hit_ground:
 		left_enter_speed = absf(sl.velocity.y)
 		(balls["left"] as Ball).play_impact(GROUND_Y, left_enter_speed)
-	# Soldaki top zeminden ayrildi: gercek geri tepme katsayisini olc.
-	if left_was_touching and not sl.touching_ground and sl.velocity.y > 0.0:
-		if left_enter_speed > 0.1:
-			e_measured = sl.velocity.y / left_enter_speed
-		if pending_match:
-			_deliver_matched_impulse(sl.velocity.y)
-	left_was_touching = sl.touching_ground
-
-	if pending_match:
-		match_wait += step
-		if match_wait > 0.25:
-			# Sol taraf beklenenden uzun surdu: teorik degere dus.
-			_deliver_matched_impulse(v_impact * cfg.restitution)
 
 	# --- sag: carpisma cozulmuyor, temasi biz yakaliyoruz ----------------
 	if hold_right:
-		# (c) secenegi, ekrandan cikis ya da (a)'da soldaki ziplamayi bekleme.
+		# (c) secenegi ya da (b)'de ekrandan cikis / tepe noktasi.
 		backend.set_position("right", hold_pos)
 		sr.position = hold_pos
-		# Bekleme sirasinda carpma hizini KORU: impuls bunun uzerine binecek.
-		var v_hold := Vector3(0.0, -v_impact, 0.0) if pending_match else Vector3.ZERO
-		backend.set_velocity("right", v_hold)
-		sr.velocity = v_hold
+		backend.set_velocity("right", Vector3.ZERO)
+		sr.velocity = Vector3.ZERO
 	else:
 		var gap: float = sr.position.y - cfg.radius - GROUND_Y
 		# Temas yalnizca top zeminden AYRILDIKTAN sonra tekrar tetiklenebilir.
@@ -390,8 +379,9 @@ func _after_step(step: float) -> void:
 			if phase == Phase.FALLING:
 				_enter_choice(sl, sr)
 			elif phase == Phase.RESOLVED:
-				_apply_choice_force(sr)
-				(balls["right"] as Ball).play_impact(GROUND_Y, v_impact)
+				if not _mirror_a:   # (a)'da kuvvet zaten her adimda soldan geliyor
+					_apply_choice_force(sr)
+				(balls["right"] as Ball).play_impact(GROUND_Y, absf(sr.velocity.y))
 		elif phase == Phase.RESOLVED and sr.position.y > cfg.ekrandan_cikis_yuksekligi and not _b_escaped:
 			# (b) secenegi: top ekrani terk eder. Cikis hizindan tepe
 			# noktasini hesaplayip gosteriyoruz - yoksa sadece kaybolurdu.
@@ -496,18 +486,17 @@ func _apply_choice_force(sr: PhysicsBackend.BodyState) -> void:
 	f_real = cfg.mass * absf(sr.velocity.y) * (1.0 + cfg.restitution) / cfg.temas_suresi
 	match choice:
 		"a":
-			if e_measured > 0.0:
-				# Soldaki ziplamadan olculen gercek e ile ayni cikis hizi.
-				f_real = cfg.mass * absf(sr.velocity.y) * (1.0 + e_measured) / cfg.temas_suresi
-				impulse_force = f_real
-				impulse_left = f_real * cfg.temas_suresi
-			else:
-				# Ilk temas: soldaki top ziplamasini bitirene kadar bekle,
-				# sonra birebir ayni impulsu ver.
-				pending_match = true
-				match_wait = 0.0
-				hold_pos = Vector3(HALF_X, GROUND_Y + cfg.radius, 0.0)
-				hold_right = true
+			# Sagdaki topu soldakiyle ayni duruma getir; bundan sonra her
+			# adimda soldakinin zemin kuvvetini alir (_pre_step).
+			var sl := backend.get_state("left")
+			var p := Vector3(HALF_X, sl.position.y, sl.position.z)
+			backend.set_position("right", p)
+			backend.set_velocity("right", sl.velocity)
+			sr.position = p
+			sr.velocity = sl.velocity
+			impulse_left = 0.0
+			_mirror_a = true
+			_mirror_native = backend.set_contact_mirror("left", "right")
 		"b":
 			impulse_force = cfg.b_carpani * f_real
 			impulse_left = cfg.b_carpani * f_real * cfg.temas_suresi
@@ -520,19 +509,6 @@ func _apply_choice_force(sr: PhysicsBackend.BodyState) -> void:
 			hold_right = true
 			show_pair = true
 			impulse_left = 0.0
-
-
-## Soldaki topun olculen cikis hizina gore sagdaki topa impuls ver.
-func _deliver_matched_impulse(exit_speed: float) -> void:
-	pending_match = false
-	hold_right = false
-	match_wait = 0.0
-	# J = m * (|v_giris| + v_cikis)  -> ayni cikis hizi, ayni yukseklik.
-	var j: float = cfg.mass * (v_impact + absf(exit_speed))
-	f_real = j / cfg.temas_suresi
-	impulse_force = f_real
-	impulse_left = j
-	right_armed = false
 
 
 func _show_feedback() -> void:

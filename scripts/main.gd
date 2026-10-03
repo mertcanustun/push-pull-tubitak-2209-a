@@ -291,8 +291,11 @@ func _physics_process(delta: float) -> void:
 func _physics_process_engine(delta: float) -> void:
 	var advancing := running and phase != Phase.CHOICE
 	if advancing:
-		_pre_step(delta)
+		# Once son motor adiminin kaydini topla, SONRA kuvvet ata: soldaki
+		# topun kaydindaki temas kuvveti, bir sonraki adimda uygulanacak olan.
+		# (a)'da sagdaki topa ayni kuvvet ayni adimda boylece verilir.
 		backend.step(delta)
+		_pre_step(delta)
 		_after_step(delta)
 	Engine.time_scale = user_speed * _slowmo()
 	backend.set_running(running and phase != Phase.CHOICE)

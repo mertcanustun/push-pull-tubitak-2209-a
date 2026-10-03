@@ -59,7 +59,7 @@ bir adım kadar (0.42 ms).
 | 480 | 75 | 1.561 | 7.81 | 1638 |
 | *Yedek Çözücü* | *378* | *1.559* | *7.88* | *1632* |
 
-## Geliştirme sırasında bulunan iki hata (Godot Melez'e özgü, düzeltildi)
+## Geliştirme sırasında bulunan hatalar (Godot Melez'e özgü, düzeltildi)
 
 1. **(b) impulsunun yarısı kayboluyordu** (top 585 m/s'de kalıyordu). Godot'da motor adımı
    `main.gd`'nin `_physics_process`'inden *sonra* geliyor; impuls bitince dış kuvvet aynı
@@ -69,6 +69,13 @@ bir adım kadar (0.42 ms).
    olduğu için "temas + hızlı" koşulu düşüyordu). Bu, temasın ortasında tek bir 8 ms'lik
    adıma yol açıyordu. Bu modda temas kuvveti ağırlığın 3 katından büyükken de ağır
    çekimde kalınıyor. Diğer motorlarda davranış değişmedi.
+3. **(a)'da sağ top fırlıyordu ve Fnet hep 0 görünüyordu.** Ölçerek doğrulandı: Godot'da
+   `_integrate_forces` motor adımı *bittikten sonra* çağrılıyor ve orada verilen kuvvet
+   *bir sonraki* adımda, o adımın süresiyle entegre ediliyor; ağır çekim de kare sınırında
+   değişiyor. Ağır çekim kapandığı an 0.42 ms için hesaplanan kuvvet 8.3 ms boyunca
+   uygulanıyordu. Artık dış kuvvet, biten adım için **impuls** (F × gerçek adım süresi)
+   olarak veriliyor; Fnet de iki ardışık geri çağrı arasındaki hız farkından ölçülüyor.
+   (1. hata da aslında bu kaymanın bir yüzüydü.)
 
 ## Ekran görüntüleri
 

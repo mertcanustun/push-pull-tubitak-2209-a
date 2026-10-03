@@ -12,24 +12,23 @@ extends Node3D
 ##   b) yukari 100·F        -> top firlar (zemin "daha buyuk" kuvvet uygular yanilgisi)
 ##   c) yukari F + asagi F  -> top durur ("etki ve tepki topun uzerinde birbirini goturur" yanilgisi)
 
-const BALL_RADIUS := 0.119
-const BALL_MASS := 0.624
-const RESTITUTION := 0.76
-const DRAG_CD := 0.47
+## Kütle/yarıçap/sekme/hava/temas/b-çarpanı/ok-ölçeği/ağır-çekim/ekrandan-çıkış
+## artık burada SABİT DEĞİL — res://config/sim2_config.tres içinde (kod
+## yazmadan Inspector'dan, hatta oyun ÇALIŞIRKEN "Remote" sekmesinden
+## değiştirilir). Bkz. scripts/sim2_config.gd.
+@export var cfg: Sim2Config = preload("res://config/sim2_config.tres")
+
 const DROP_HEIGHT := 3.0
 const HALF_X := 1.8
 const GROUND_Y := 0.0
-## Gercek bir basketbol temasi ~8 ms surer. Secilen kuvvet bu sure boyunca
-## uygulanir: J = F·T = m·v·(1+e) oldugundan (a) secenegi solla ayni ciker.
-const T_CONTACT := 0.008
-const ARROW_K := 0.36
 const TOOL_N_PER_M := 40.0
-## Sagdaki top bu yuksekligi asarsa ekrandan cikmis sayilir ((b) secenegi).
-const ESCAPE_Y := 9.0
 
 enum Phase { READY, FALLING, CHOICE, RESOLVED }
 
 var backend: PhysicsBackend
+## cfg.backend'in son bilinen değeri — yalnızca FİZİK MOTORU değişince
+## otomatik reset_sim() tetiklemek için (bkz. _on_cfg_changed).
+var _last_backend: int = -1
 var phase: int = Phase.READY
 var running := false
 var user_speed := 1.0
@@ -83,6 +82,25 @@ func _ready() -> void:
 	_build_backend()
 	_build_balls()
 	reset_sim()
+	_last_backend = cfg.backend
+	cfg.changed.connect(_on_cfg_changed)
+
+
+## cfg Inspector'dan ya da ÇALIŞIRKEN "Remote" sekmesinden değişince tetiklenir.
+## Yalnızca Fizik Motoru değiştiyse otomatik _build_backend()+reset_sim()
+## yapılır. BİLİNEN SINIR: kütle/sekme/hava gibi diğer alanlar bir sonraki
+## Sıfırla/R basışında GÜNCELLENMEZ — backend.reset() mevcut BodySpec
+## nesnelerini (cfg'nin o anki değil, _build_backend() çağrıldığı andaki
+## anlık görüntüsünü) yeniden kullanır. MuJoCo motorunu her Sıfırla'da
+## tazelemek (XML'i yeniden yüklemek) kaynak sızıntısı riski taşıdığı için
+## bilerek yapılmadı. Canlı "sekmeyi değiştir, azaldığını gör" demosu için:
+## değeri değiştir, Fizik Motoru'nu bir kez başka bir seçeneğe alıp geri al
+## (bu, _build_backend()'i cfg'nin GÜNCEL haliyle yeniden tetikler).
+func _on_cfg_changed() -> void:
+	if cfg.backend != _last_backend:
+		_last_backend = cfg.backend
+		_build_backend()
+		reset_sim()
 
 
 # ------------------------------------------------------------------ kurulum
@@ -98,31 +116,33 @@ func _build_hud() -> void:
 	hud.choice_made.connect(_on_choice)
 
 
-## Hangi fizik arka ucu kullanilsin:
-##   "auto"    - MuJoCo varsa onu kullan, yoksa GDScript cozucuye dus
-##   "mujoco"  - MuJoCo'yu zorla (yoksa yine de dusuyoruz ama uyari basar)
-##   "native"  - MuJoCo derlenmis olsa bile GDScript cozucuyu kullan
-## Karsilastirma yaparken bu satiri degistirip iki arka ucu yan yana denersin.
-const FORCE_BACKEND := "mujoco"
-
-
+## Hangi fizik arka ucu kullanilsin: cfg.backend'den okunur (Inspector/Remote).
+##   MUJOCO        - MuJoCo'yu zorla (yoksa GDScript cozucuye duser, uyari basar)
+##   YEDEK_COZUCU  - MuJoCo derlenmis olsa bile GDScript cozucuyu kullan
+##   GODOT_MELEZ   - henuz uygulanmadi (Adim D) - uyariyla Yedek Cozucu'ye duser
 func _build_backend() -> void:
-	if FORCE_BACKEND == "native":
-		backend = NativeBackend.new()
-	else:
-		var mj := MuJoCoBackend.new()
-		if mj.initialize():
-			backend = mj
-		else:
+	match cfg.backend:
+		Sim2Config.Backend.YEDEK_COZUCU:
 			backend = NativeBackend.new()
-			push_warning("MuJoCo kullanılamadı: %s" % mj.get_error())
+		Sim2Config.Backend.GODOT_MELEZ:
+			push_warning("Godot Melez motoru henüz uygulanmadı (Adım D) — Yedek Çözücü kullanılıyor.")
+			backend = NativeBackend.new()
+		_:  # Sim2Config.Backend.MUJOCO
+			var mj := MuJoCoBackend.new()
+			if mj.initialize():
+				backend = mj
+			else:
+				backend = NativeBackend.new()
+				push_warning("MuJoCo kullanılamadı: %s" % mj.get_error())
 
 	for side in ["left", "right"]:
 		var spec := PhysicsBackend.BodySpec.new(side)
-		spec.mass = BALL_MASS
-		spec.radius = BALL_RADIUS
-		spec.restitution = RESTITUTION
-		spec.drag_coefficient = DRAG_CD
+		spec.mass = cfg.mass
+		spec.radius = cfg.radius
+		spec.restitution = cfg.restitution
+		spec.drag_coefficient = cfg.drag_cd
+		spec.air_density = cfg.hava_yogunlugu
+		spec.stiffness = cfg.sertlik
 		spec.position = Vector3(-HALF_X if side == "left" else HALF_X, DROP_HEIGHT, 0.0)
 		# Senaryo planinin can alici noktasi: sagda carpisma KAPALI,
 		# yercekimi ve hava surtunmesi ACIK.
@@ -132,7 +152,7 @@ func _build_backend() -> void:
 
 func _build_balls() -> void:
 	for side in ["left", "right"]:
-		var b := SimBall.new(BALL_RADIUS)
+		var b := SimBall.new(cfg.radius)
 		add_child(b)
 		balls[side] = b
 
@@ -159,7 +179,7 @@ func reset_sim() -> void:
 	show_pair = false
 	right_armed = true
 	drag_ball = ""
-	drag_arrow.set_force(Vector3.ZERO, ARROW_K)
+	drag_arrow.set_force(Vector3.ZERO, cfg.ok_olcegi)
 	hud.show_choice(false)
 	hud.show_feedback("")
 	hud.set_start_text("Başlat")
@@ -195,7 +215,7 @@ func _process(_dt: float) -> void:
 	if tool_active and drag_ball != "":
 		var p := _mouse_on_plane(get_viewport().get_mouse_position())
 		drag_arrow.global_position = drag_origin
-		drag_arrow.set_force((p - drag_origin) * TOOL_N_PER_M, ARROW_K)
+		drag_arrow.set_force((p - drag_origin) * TOOL_N_PER_M, cfg.ok_olcegi)
 
 
 func _physics_process(delta: float) -> void:
@@ -225,10 +245,10 @@ func _slowmo() -> float:
 		var s := backend.get_state(side)
 		if s == null:
 			continue
-		var gap: float = s.position.y - BALL_RADIUS - GROUND_Y
+		var gap: float = s.position.y - cfg.radius - GROUND_Y
 		var fast := absf(s.velocity.y) > 0.6
 		if (s.touching_ground and fast) or (gap < 0.30 and s.velocity.y < -0.6):
-			f = 0.05
+			f = cfg.agir_cekim_carpani
 	return f
 
 
@@ -252,7 +272,7 @@ func _after_step(step: float) -> void:
 		match_wait += step
 		if match_wait > 0.25:
 			# Sol taraf beklenenden uzun surdu: teorik degere dus.
-			_deliver_matched_impulse(v_impact * RESTITUTION)
+			_deliver_matched_impulse(v_impact * cfg.restitution)
 
 	# --- sag: carpisma cozulmuyor, temasi biz yakaliyoruz ----------------
 	if hold_right:
@@ -264,7 +284,7 @@ func _after_step(step: float) -> void:
 		backend.set_velocity("right", v_hold)
 		sr.velocity = v_hold
 	else:
-		var gap: float = sr.position.y - BALL_RADIUS - GROUND_Y
+		var gap: float = sr.position.y - cfg.radius - GROUND_Y
 		# Temas yalnizca top zeminden AYRILDIKTAN sonra tekrar tetiklenebilir.
 		# Bu kilit olmazsa kuvvet her karede yeniden hesaplanir ve impuls
 		# hic tamamlanmaz (topun ziplamasi sonmus gorunurdu).
@@ -277,13 +297,13 @@ func _after_step(step: float) -> void:
 			elif phase == Phase.RESOLVED:
 				_apply_choice_force(sr)
 				(balls["right"] as SimBall).play_impact(GROUND_Y, v_impact)
-		elif phase == Phase.RESOLVED and sr.position.y > ESCAPE_Y:
+		elif phase == Phase.RESOLVED and sr.position.y > cfg.ekrandan_cikis_yuksekligi:
 			# (b) secenegi: top ekrani terk eder. Cikis hizindan tepe
 			# noktasini hesaplayip gosteriyoruz - yoksa sadece kaybolurdu.
 			var apex: float = sr.position.y + sr.velocity.y * sr.velocity.y / (2.0 * 9.81)
-			hold_pos = Vector3(HALF_X, ESCAPE_Y, 0.0)
+			hold_pos = Vector3(HALF_X, cfg.ekrandan_cikis_yuksekligi, 0.0)
 			hold_right = true
-			hud.set_status("Sağdaki top ekrandan çıktı  -  tepe noktası yaklaşık %.0f m   (sol tarafta %.2f m)" % [apex, v_impact * v_impact * RESTITUTION * RESTITUTION / (2.0 * 9.81)])
+			hud.set_status("Sağdaki top ekrandan çıktı  -  tepe noktası yaklaşık %.0f m   (sol tarafta %.2f m)" % [apex, v_impact * v_impact * cfg.restitution * cfg.restitution / (2.0 * 9.81)])
 
 	if impulse_left > 0.0:
 		impulse_left -= _applied_f * step
@@ -298,11 +318,11 @@ func _enter_choice(sl: PhysicsBackend.BodyState, sr: PhysicsBackend.BodyState) -
 	# Iki topu da tam temas noktasina oturt ki karsilastirma adil olsun.
 	for side in ["left", "right"]:
 		var x: float = -HALF_X if side == "left" else HALF_X
-		backend.set_position(side, Vector3(x, GROUND_Y + BALL_RADIUS, 0.0))
-	sl.position.y = GROUND_Y + BALL_RADIUS
-	sr.position.y = GROUND_Y + BALL_RADIUS
+		backend.set_position(side, Vector3(x, GROUND_Y + cfg.radius, 0.0))
+	sl.position.y = GROUND_Y + cfg.radius
+	sr.position.y = GROUND_Y + cfg.radius
 	# Gercek tepki kuvveti: J = m·v·(1+e) = F·T
-	f_real = BALL_MASS * v_impact * (1.0 + RESTITUTION) / T_CONTACT
+	f_real = cfg.mass * v_impact * (1.0 + cfg.restitution) / cfg.temas_suresi
 	hud.show_choice(true)
 	hud.set_status("Çarpma hızı %.2f m/s  -  zemin topa hangi kuvveti uygular?" % v_impact)
 
@@ -320,34 +340,34 @@ func _on_choice(c: String) -> void:
 
 
 func _apply_choice_force(sr: PhysicsBackend.BodyState) -> void:
-	backend.set_position("right", Vector3(HALF_X, GROUND_Y + BALL_RADIUS, 0.0))
-	sr.position.y = GROUND_Y + BALL_RADIUS
+	backend.set_position("right", Vector3(HALF_X, GROUND_Y + cfg.radius, 0.0))
+	sr.position.y = GROUND_Y + cfg.radius
 	# Her temasta kuvvet o temasin hizindan yeniden hesaplanir; aksi halde
 	# top her ziplamada enerji kazanirdi.
-	f_real = BALL_MASS * absf(sr.velocity.y) * (1.0 + RESTITUTION) / T_CONTACT
+	f_real = cfg.mass * absf(sr.velocity.y) * (1.0 + cfg.restitution) / cfg.temas_suresi
 	match choice:
 		"a":
 			if e_measured > 0.0:
 				# Soldaki ziplamadan olculen gercek e ile ayni cikis hizi.
-				f_real = BALL_MASS * absf(sr.velocity.y) * (1.0 + e_measured) / T_CONTACT
+				f_real = cfg.mass * absf(sr.velocity.y) * (1.0 + e_measured) / cfg.temas_suresi
 				impulse_force = f_real
-				impulse_left = f_real * T_CONTACT
+				impulse_left = f_real * cfg.temas_suresi
 			else:
 				# Ilk temas: soldaki top ziplamasini bitirene kadar bekle,
 				# sonra birebir ayni impulsu ver.
 				pending_match = true
 				match_wait = 0.0
-				hold_pos = Vector3(HALF_X, GROUND_Y + BALL_RADIUS, 0.0)
+				hold_pos = Vector3(HALF_X, GROUND_Y + cfg.radius, 0.0)
 				hold_right = true
 		"b":
-			impulse_force = 100.0 * f_real
-			impulse_left = 100.0 * f_real * T_CONTACT
+			impulse_force = cfg.b_carpani * f_real
+			impulse_left = cfg.b_carpani * f_real * cfg.temas_suresi
 		"c":
 			# Yukari F + asagi F -> bilesike sifir, top duruyor.
 			backend.set_external_force("right", Vector3.ZERO)
 			backend.set_velocity("right", Vector3.ZERO)
 			sr.velocity = Vector3.ZERO
-			hold_pos = Vector3(HALF_X, GROUND_Y + BALL_RADIUS, 0.0)
+			hold_pos = Vector3(HALF_X, GROUND_Y + cfg.radius, 0.0)
 			hold_right = true
 			show_pair = true
 			impulse_left = 0.0
@@ -359,8 +379,8 @@ func _deliver_matched_impulse(exit_speed: float) -> void:
 	hold_right = false
 	match_wait = 0.0
 	# J = m * (|v_giris| + v_cikis)  -> ayni cikis hizi, ayni yukseklik.
-	var j: float = BALL_MASS * (v_impact + absf(exit_speed))
-	f_real = j / T_CONTACT
+	var j: float = cfg.mass * (v_impact + absf(exit_speed))
+	f_real = j / cfg.temas_suresi
 	impulse_force = f_real
 	impulse_left = j
 	right_armed = false
@@ -376,10 +396,13 @@ func _show_feedback() -> void:
 			txt += "İkisi FARKLI cisimlere etki ettiği için birbirini götürmez."
 			txt = txt % [f_real, f_real, f_real]
 		"b":
-			txt = "[color=#ffb84d][b]b) yanlış.[/b][/color] 100·F ≈ %.0f N uygulandı ve top bırakıldığı yükseklikten "
+			txt = "[color=#ffb84d][b]b) yanlış.[/b][/color] {carpan}·F ≈ {f} N uygulandı ve top bırakıldığı yükseklikten "
 			txt += "çok daha yukarı fırladı — günlük hayatta böyle bir şey görmüyorsun. "
 			txt += "Zemin 'daha güçlü ittiği için' top zıplamıyor; tepki kuvveti etki kuvvetine tam eşittir."
-			txt = txt % [100.0 * f_real]
+			txt = txt.format({
+				"carpan": ("%d" % cfg.b_carpani) if is_equal_approx(cfg.b_carpani, roundf(cfg.b_carpani)) else ("%.1f" % cfg.b_carpani),
+				"f": "%.0f" % (cfg.b_carpani * f_real),
+			})
 		"c":
 			txt = "[color=#ff7d7d][b]c) yanlış — ama en sık yapılan hata bu.[/b][/color] Yukarı F ve aşağı F aynı cisme "
 			txt += "etki ettiği için top duruyor. Oysa Newton'un 3. yasasındaki çift AYNI cisme etki etmez: "
@@ -446,9 +469,9 @@ func _set_arrow(ball: SimBall, key: String, force: Vector3, slot: int) -> void:
 	a.position = Vector3((float(slot) - 1.6) * ARROW_SPACING, 0.0, 0.0)
 	a.label_lift = float(slot) * 0.13
 	if arrow_on.get(key, false):
-		a.set_force(force, ARROW_K)
+		a.set_force(force, cfg.ok_olcegi)
 	else:
-		a.set_force(Vector3.ZERO, ARROW_K)
+		a.set_force(Vector3.ZERO, cfg.ok_olcegi)
 
 
 func _update_readouts() -> void:
@@ -458,7 +481,7 @@ func _update_readouts() -> void:
 			continue
 		# Oklarla AYNI kaynak - iki yerde farkli sayi cikmasin.
 		var d := _display_forces(side, s)
-		var h: float = maxf(s.position.y - BALL_RADIUS, 0.0)
+		var h: float = maxf(s.position.y - cfg.radius, 0.0)
 		var t := "[color=#c8cddb]Yükseklik[/color]  %.2f m\n" % h
 		t += "[color=#c8cddb]Hız[/color]  %.2f m/s\n" % s.velocity.y
 		t += "[color=#f05a5a]G[/color] %.1f N   " % (d["gravity"] as Vector3).length()
@@ -504,5 +527,5 @@ func _end_drag(screen_pos: Vector2) -> void:
 	impulse_left = 0.0
 	var label: String = "Sol" if drag_ball == "left" else "Sağ"
 	drag_ball = ""
-	drag_arrow.set_force(Vector3.ZERO, ARROW_K)
+	drag_arrow.set_force(Vector3.ZERO, cfg.ok_olcegi)
 	hud.set_status("%s topa %.0f N uygulandı (ok aracı)" % [label, force.length()])

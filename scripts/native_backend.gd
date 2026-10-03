@@ -26,7 +26,7 @@ func add_body(spec: PhysicsBackend.BodySpec) -> void:
 	super.add_body(spec)
 	# Temas modeli: k sabit secilir, c geri tepme katsayisindan tureitilir.
 	# zeta = -ln(e) / sqrt(pi^2 + ln(e)^2),  c = 2*zeta*sqrt(k*m)
-	var k := 1.0e5
+	var k := spec.stiffness
 	var e: float = clampf(spec.restitution, 0.01, 0.99)
 	var ln_e := log(e)
 	var zeta := -ln_e / sqrt(PI * PI + ln_e * ln_e)
@@ -83,7 +83,7 @@ func step(dt: float) -> void:
 
 		for i in SUBSTEPS:
 			var f_g := spec.mass * PhysicsBackend.GRAVITY
-			var f_d := PhysicsBackend.drag_force(s.velocity, spec.radius, spec.drag_coefficient)
+			var f_d := PhysicsBackend.drag_force(s.velocity, spec.radius, spec.drag_coefficient, spec.air_density)
 			var f_c := Vector3.ZERO
 
 			# --- temas (yalnizca collisions_enabled ise) -------------------

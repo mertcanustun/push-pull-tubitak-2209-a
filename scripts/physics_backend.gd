@@ -39,6 +39,10 @@ class BodySpec extends RefCounted:
 	var velocity := Vector3.ZERO
 	var restitution := 0.76     # basketbol: 1.8 m'den birakinca ~1.05 m
 	var drag_coefficient := 0.47  # kure
+	var air_density := 1.225      # kg/m^3 - deniz seviyesi
+	## Yay sabiti (N/m) - yalnizca NativeBackend kullanir (yay-sonum temas
+	## modeli). Sonum restitution'dan turetilir (bkz. native_backend.gd).
+	var stiffness := 1.0e5
 	## false ise: yercekimi ve hava surtunmesi isler ama CARPISMA islemez.
 	## Sahnenin sag yarisi bunu kullanir (senaryo planindaki istek).
 	var collisions_enabled := true
@@ -93,10 +97,10 @@ func reset() -> void:
 
 ## Yercekimi ve hava surtunmesi her iki arka uc icin de ayni formulle
 ## hesaplanir, boylece iki yari arasindaki karsilastirma adil kalir.
-static func drag_force(velocity: Vector3, radius: float, cd: float) -> Vector3:
+static func drag_force(velocity: Vector3, radius: float, cd: float, density: float = AIR_DENSITY) -> Vector3:
 	var speed := velocity.length()
 	if speed < 0.0001:
 		return Vector3.ZERO
 	var area := PI * radius * radius
 	# F_d = -1/2 * rho * Cd * A * |v| * v
-	return -0.5 * AIR_DENSITY * cd * area * speed * velocity
+	return -0.5 * density * cd * area * speed * velocity

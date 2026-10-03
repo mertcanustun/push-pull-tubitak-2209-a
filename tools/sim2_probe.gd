@@ -98,6 +98,7 @@ func _measure_option(main, choice: String) -> void:
 	print("SEÇENEK (%s):" % choice)
 	if choice == "b":
 		print("  ekrandan çıktı mı: %s  (hold_pos.y=%.1f)" % [str(main.hold_right), main.hold_pos.y])
+		print("  durum metni: %s" % main.hud._status.text)
 	elif choice == "c":
 		print("  son hız: %s  (0'a yakın olmalı)" % str(sr.velocity))
 		print("  son konum.y: %.3f  (sabit kalmalı)" % sr.position.y)

@@ -300,16 +300,40 @@ func _after_step(step: float) -> void:
 		elif phase == Phase.RESOLVED and sr.position.y > cfg.ekrandan_cikis_yuksekligi:
 			# (b) secenegi: top ekrani terk eder. Cikis hizindan tepe
 			# noktasini hesaplayip gosteriyoruz - yoksa sadece kaybolurdu.
-			var apex: float = sr.position.y + sr.velocity.y * sr.velocity.y / (2.0 * 9.81)
+			var apex: float = sr.position.y + _rise_height(sr.velocity.y)
 			hold_pos = Vector3(HALF_X, cfg.ekrandan_cikis_yuksekligi, 0.0)
 			hold_right = true
-			hud.set_status("Sağdaki top ekrandan çıktı  -  tepe noktası yaklaşık %.0f m   (sol tarafta %.2f m)" % [apex, v_impact * v_impact * cfg.restitution * cfg.restitution / (2.0 * 9.81)])
+			hud.set_status("Sağdaki top ekrandan çıktı  -  tepe noktası yaklaşık %.0f m   (sol tarafta %.2f m)" % [apex, _rise_height(v_impact * cfg.restitution)])
 
 	if impulse_left > 0.0:
 		impulse_left -= _applied_f * step
 		if impulse_left <= 1e-9:
 			impulse_left = 0.0
 			backend.set_external_force("right", Vector3.ZERO)
+
+
+## v hızıyla yukarı fırlatılan topun ne kadar YÜKSELECEĞİ (m), seçili hava
+## modeline göre. Eskiden y + v²/2g idi (havasız) — (b)'de ~60 000 m
+## yazıyordu; kare hava direnciyle gerçekte ~200 m.
+##   GERCEKCI_KARE:        ln(1 + k·v²/g) / (2k),  k = ½·ρ·Cd·A / m
+##   GODOT_SONUM_DOGRUSAL: v/d − (g/d²)·ln(1 + d·v/g)
+##   KAPALI:               v² / 2g
+func _rise_height(v: float) -> float:
+	if v <= 0.0:
+		return 0.0
+	var g: float = -PhysicsBackend.GRAVITY.y
+	match cfg.hava_modeli:
+		Sim2Config.HavaModeli.GERCEKCI_KARE:
+			var area := PI * cfg.radius * cfg.radius
+			var k: float = 0.5 * cfg.hava_yogunlugu * cfg.drag_cd * area / cfg.mass
+			if k > 1e-9:
+				return log(1.0 + k * v * v / g) / (2.0 * k)
+		Sim2Config.HavaModeli.GODOT_SONUM_DOGRUSAL:
+			var d: float = cfg.dogrusal_sonum
+			if d > 1e-9:
+				return v / d - (g / (d * d)) * log(1.0 + d * v / g)
+	# KAPALI (ya da katsayı ~0): havasız formül
+	return v * v / (2.0 * g)
 
 
 func _enter_choice(sl: PhysicsBackend.BodyState, sr: PhysicsBackend.BodyState) -> void:

@@ -62,7 +62,7 @@ var arrow_on := {
 	"external": true, "net": true, "net_minus_g": false,
 }
 
-var balls := {}          # "left"/"right" -> SimBall
+var balls := {}          # "left"/"right" -> Ball (sahnedeki TopSol / TopSag)
 var hud: Hud
 var camera: Camera3D
 var drag_ball := ""
@@ -150,11 +150,17 @@ func _build_backend() -> void:
 		backend.add_body(spec)
 
 
+## Toplar artık scenes/main.tscn içinde gerçek node (scenes/ball.tscn
+## örnekleri). MuJoCo / Yedek Çözücü modlarında KUKLA: Godot fiziği kapalı,
+## konum her karede backend'den yazılır (_sync_visuals).
 func _build_balls() -> void:
-	for side in ["left", "right"]:
-		var b := SimBall.new(cfg.radius)
-		add_child(b)
-		balls[side] = b
+	balls["left"] = $TopSol
+	balls["right"] = $TopSag
+	for side in balls:
+		var b: Ball = balls[side]
+		b.radius = cfg.radius
+		b.mass = cfg.mass
+		b.set_puppet(true)
 
 
 # ------------------------------------------------------------------- akis
@@ -259,7 +265,7 @@ func _after_step(step: float) -> void:
 	# --- sol: gercek carpisma -------------------------------------------
 	if sl.just_hit_ground:
 		left_enter_speed = absf(sl.velocity.y)
-		(balls["left"] as SimBall).play_impact(GROUND_Y, left_enter_speed)
+		(balls["left"] as Ball).play_impact(GROUND_Y, left_enter_speed)
 	# Soldaki top zeminden ayrildi: gercek geri tepme katsayisini olc.
 	if left_was_touching and not sl.touching_ground and sl.velocity.y > 0.0:
 		if left_enter_speed > 0.1:
@@ -296,7 +302,7 @@ func _after_step(step: float) -> void:
 				_enter_choice(sl, sr)
 			elif phase == Phase.RESOLVED:
 				_apply_choice_force(sr)
-				(balls["right"] as SimBall).play_impact(GROUND_Y, v_impact)
+				(balls["right"] as Ball).play_impact(GROUND_Y, v_impact)
 		elif phase == Phase.RESOLVED and sr.position.y > cfg.ekrandan_cikis_yuksekligi:
 			# (b) secenegi: top ekrani terk eder. Cikis hizindan tepe
 			# noktasini hesaplayip gosteriyoruz - yoksa sadece kaybolurdu.
@@ -359,7 +365,7 @@ func _on_choice(c: String) -> void:
 	hud.show_choice(false)
 	var sr := backend.get_state("right")
 	_apply_choice_force(sr)
-	(balls["right"] as SimBall).play_impact(GROUND_Y, v_impact)
+	(balls["right"] as Ball).play_impact(GROUND_Y, v_impact)
 	_show_feedback()
 
 
@@ -468,7 +474,7 @@ func _display_forces(side: String, s: PhysicsBackend.BodyState) -> Dictionary:
 func _sync_visuals() -> void:
 	for side in ["left", "right"]:
 		var s := backend.get_state(side)
-		var ball: SimBall = balls[side]
+		var ball: Ball = balls[side]
 		if s == null or not is_instance_valid(ball):
 			continue
 		ball.global_position = s.position
@@ -488,7 +494,7 @@ func _sync_visuals() -> void:
 
 const ARROW_SPACING := 0.24
 
-func _set_arrow(ball: SimBall, key: String, force: Vector3, slot: int) -> void:
+func _set_arrow(ball: Ball, key: String, force: Vector3, slot: int) -> void:
 	var a: ForceArrow = ball.arrows[key]
 	a.position = Vector3((float(slot) - 1.6) * ARROW_SPACING, 0.0, 0.0)
 	a.label_lift = float(slot) * 0.13

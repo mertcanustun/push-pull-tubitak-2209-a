@@ -1,6 +1,7 @@
-[gd_scene load_steps=116 format=3]
+[gd_scene load_steps=117 format=3]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_o5qli"]
+[ext_resource type="PackedScene" path="res://scenes/ball.tscn" id="2_sugp2"]
 
 [sub_resource type="Environment" id="Environment_o5qli"]
 background_mode = 1
@@ -895,6 +896,12 @@ omni_range = 14.0
 transform = Transform3D(0.9063077, 0.37314972, -0.19840728, 0, 0.4694715, 0.88294756, 0.42261824, -0.8002221, 0.42548576, 0, 0, 0)
 light_color = Color(1, 0.95686275, 0.8862745, 1)
 light_energy = 0.85
+
+[node name="TopSol" parent="." instance=ExtResource("2_sugp2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -1.8, 3, 0)
+
+[node name="TopSag" parent="." instance=ExtResource("2_sugp2")]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 1.8, 3, 0)
 
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.9986988, 0.050997388, 0, -0.050997388, 0.9986988, 0, 1.62, 4.7)

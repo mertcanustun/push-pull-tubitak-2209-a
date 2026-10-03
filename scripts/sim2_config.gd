@@ -29,6 +29,7 @@ extends Resource
 
 enum Backend { MUJOCO, YEDEK_COZUCU, GODOT_MELEZ }
 enum HavaModeli { GERCEKCI_KARE, GODOT_SONUM_DOGRUSAL, KAPALI }
+enum BGosterim { KAMERA_TAKIP, FIRLATMA_AGIR_CEKIM, IKISI, HICBIRI }
 
 @export_group("Fizik Motoru")
 ## MUJOCO bulunamazsa (derlenmemişse) otomatik Yedek Çözücü'ye düşer.
@@ -77,4 +78,29 @@ enum HavaModeli { GERCEKCI_KARE, GODOT_SONUM_DOGRUSAL, KAPALI }
 @export_range(0.001, 1.0, 0.001) var agir_cekim_carpani: float = 0.05
 @export_range(1.0, 50.0, 0.5, "suffix:m") var ekrandan_cikis_yuksekligi: float = 9.0
 
-# --- (b) gösterimi: sonraki adımda doldurulacak (bkz. ADIM2-PROMPT.md Adım E) ---
+@export_group("(b) gösterimi")
+## (b)'de top ~1200 m/s ile fırlar: 9 m'ye (ekrandan çıkış) 11 ms'de varır,
+## normal hızda tek kareden kısa. Bu ayarlar YALNIZCA görüntüyü/zamanı
+## değiştirir; fizik ve ekrana yazılan tepe noktası hesabı aynı kalır.
+##   FIRLATMA_AGIR_CEKIM: seçim anından top ekrandan çıkana kadar ağır çekim
+##   KAMERA_TAKIP: top ekrandan çıkınca kamera onu tepe noktasına kadar izler,
+##                 kısa bekler, sonra ana kamera pozuna geri döner
+##   IKISI: önce fırlatma ağır çekimde, sonra kamera takibi
+##   HICBIRI: eski davranış (top 9 m'de durdurulur, yalnızca yazı)
+@export var b_gosterim: BGosterim = BGosterim.IKISI
+## Fırlatma ağır çekim çarpanı (0.01 → ilk 9 m yaklaşık 1 saniyede izlenir).
+@export_range(0.001, 1.0, 0.001) var firlatma_agir_cekim_carpani: float = 0.01
+## Fırlatma ağır çekiminin üst sınırı (gerçek saniye). Normalde top ekrandan
+## çıkınca zaten biter; bu yalnızca bir güvenlik sınırı.
+@export_range(0.1, 10.0, 0.1, "suffix:sn") var firlatma_agir_cekim_suresi: float = 3.0
+## Kamera takibinin üst sınırı (gerçek saniye). Tepe noktasına ~3.5 sn'de
+## varılıyor; bu süre dolarsa takip tepeyi beklemeden biter.
+@export_range(0.5, 20.0, 0.1, "suffix:sn") var kamera_takip_suresi: float = 8.0
+## Kamera en fazla bu yüksekliğe kadar çıkar; top daha yükseğe giderse
+## kadrajdan çıkar ama yükseklik göstergesi saymaya devam eder.
+@export_range(10.0, 2000.0, 5.0, "suffix:m") var kamera_takip_max_yukseklik: float = 250.0
+@export_range(0.0, 5.0, 0.1, "suffix:sn") var kamera_tepe_bekleme: float = 1.0
+@export_range(0.1, 5.0, 0.1, "suffix:sn") var kamera_donus_suresi: float = 1.5
+## Takip sırasında topun yanında yükseklik cetveli: her 1 m'de çentik, bu
+## aralıkta etiket. Kadraj dikeyde ~5 m gösterir; 5 m'de her an bir etiket görünür.
+@export_range(1.0, 100.0, 1.0, "suffix:m") var yukseklik_isaret_araligi: float = 5.0

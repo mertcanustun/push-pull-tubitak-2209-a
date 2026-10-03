@@ -36,13 +36,13 @@ godot --headless --path . --fixed-fps 60 --script tools/motor_karsilastirma.gd
 | Godot Melez | 1.572 | 7.50 | 1665 | 18 | 0.4167 | 0.783 |
 | *Fark (Melez − Yedek)* | *+0.8 %* | *−4.8 %* | *+2.0 %* | | | *+1.8 %* |
 
-(b) seçeneği (zemin 100·F uygular):
+(b) seçeneği (zemin 100·F uygular; varsayılan (b) gösterimi IKISI, yani fırlatma ağır çekimde):
 
 | Motor | Sağ topun en yüksek hızı (m/s) | Ekrana yazılan tepe noktası |
 |---|---|---|
 | MuJoCo | yok | yok |
-| Yedek Çözücü | 1186 | ~200 m |
-| Godot Melez | 1185 | ~211 m |
+| Yedek Çözücü | 1195 | ~200 m |
+| Godot Melez | 1202 | ~200 m |
 
 Kabul ölçütü (≥ 15 temas adımı; Yedek Çözücü ile birkaç % içinde) sağlanıyor.
 
@@ -52,16 +52,12 @@ Godot Melez'in tik sayısı artırıldıkça sonuçlar Yedek Çözücü'ye yakı
 fizikten değil, zamanın ayrıklaştırılmasından geliyor. Temas süresindeki fark tam olarak
 bir adım kadar (0.42 ms).
 
-| Godot Melez tik | Temas adımı | İlk sekme (m) | Temas (ms) | Tepe N | (b) tepe |
-|---|---|---|---|---|---|
-| 120 (varsayılan) | 18 | 1.572 | 7.50 | 1665 | 211 m |
-| 240 | 37 | 1.564 | 7.71 | 1646 | 199 m |
-| 480 | 75 | 1.561 | 7.81 | 1638 | 200 m |
-| *Yedek Çözücü* | *378* | *1.559* | *7.88* | *1632* | *200 m* |
-
-(b)'deki tepe noktası farkı, impuls bittikten sonra ağır çekimin kalkmasından kaynaklanıyor:
-top ~1185 m/s hızla tek bir 8.3 ms'lik Godot adımıyla ilerliyor ve hava direnci bu büyük
-adımda yaklaşık hesaplanıyor. Yedek Çözücü aynı süreyi 40 alt adımla integre ediyor.
+| Godot Melez tik | Temas adımı | İlk sekme (m) | Temas (ms) | Tepe N |
+|---|---|---|---|---|
+| 120 (varsayılan) | 18 | 1.572 | 7.50 | 1665 |
+| 240 | 37 | 1.564 | 7.71 | 1646 |
+| 480 | 75 | 1.561 | 7.81 | 1638 |
+| *Yedek Çözücü* | *378* | *1.559* | *7.88* | *1632* |
 
 ## Geliştirme sırasında bulunan iki hata (Godot Melez'e özgü, düzeltildi)
 
@@ -78,3 +74,21 @@ adımda yaklaşık hesaplanıyor. Yedek Çözücü aynı süreyi 40 alt adımla 
 
 `godot --path . --script tools/shots.gd -- --motor=godot` (ya da `yedek`) →
 `tools/shots_godot/` ve `tools/shots_yedek/`.
+
+## (b) gösterimi ile (Adım E) — kamera takibinde gerçekten uçulan tepe
+
+Kamera takibi modlarında sağdaki top 9 m'de durdurulmaz, tepe noktasına kadar gerçekten uçar.
+`tools/b_gosterim_olc.gd` ile (60 kare/s, varsayılan ayarlar):
+
+| Motor | Mod | Yazılan tepe (formül) | Gerçekten uçulan tepe |
+|---|---|---|---|
+| Yedek Çözücü | KAMERA_TAKIP / IKISI | 200 m | 199 m |
+| Godot Melez (120 Hz) | KAMERA_TAKIP | 196 m | 184 m |
+| Godot Melez (120 Hz) | IKISI | 200 m | 186 m |
+| Godot Melez (240 Hz) | IKISI | 200 m | 193 m |
+
+Yedek Çözücü'de formül ile gerçek uçuş %1 içinde. Godot Melez'de takip sırasında zaman normal
+hızda aktığı için ~1200 m/s'deki top 8.3 ms'lik adımlarla ilerliyor ve hava direnci bu büyük
+adımlarda fazla hesaplanıyor; gerçek tepe biraz düşük çıkıyor. Tik sayısını artırmak farkı
+küçültür. (b) zaten bilerek yanlış bir fizik olduğu için ekrana yazılan değer formülden gelir.
+IKISI modunda fırlatma ağır çekimi (0.01) yazılan değeri de doğrular: iki motorda 200 m.

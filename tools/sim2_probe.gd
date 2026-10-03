@@ -12,9 +12,15 @@ extends SceneTree
 const DT := 1.0 / 240.0  # ince adım - ölçüm hassasiyeti için
 
 func _init() -> void:
+	# Bu test _physics_process'i ELLE çağırır — yalnızca kendi adımını atan
+	# motorlarda geçerli. Kaydedilmiş varsayılan ne olursa olsun Yedek Çözücü.
+	var cfg: Sim2Config = load("res://config/sim2_config.tres")
+	cfg.backend = Sim2Config.Backend.YEDEK_COZUCU
 	var main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await process_frame
+	# Gerileme ölçüsü ESKİ davranışa göre: (b) gösterimi kapalı (Adım E öncesi).
+	main.cfg.b_gosterim = Sim2Config.BGosterim.HICBIRI
 
 	print("backend: ", main.backend.backend_name())
 	print("")

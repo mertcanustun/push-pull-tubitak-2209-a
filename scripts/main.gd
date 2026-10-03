@@ -42,6 +42,21 @@ var impulse_left := 0.0
 var impulse_force := 0.0
 ## Godot Melez: impuls bitince dis kuvvet bir SONRAKI tikte sifirlanir.
 var _zero_ext_next := false
+## (b) gosterimi (cfg "(b) gösterimi"): secim anindaki mod, firlatma agir
+## cekimi aktif mi, top ekrandan cikti mi, kamera takibi.
+var _b_mode: int = Sim2Config.BGosterim.HICBIRI
+var _launch_slow := false
+var _launch_elapsed := 0.0
+var _b_escaped := false
+var _bcam: BGosterimKamera
+## Kamera sag topu izlerken sol top kadraj disinda. Sekmeye devam ederse her
+## yere yaklasisinda kuresel agir cekim (0.05) devreye girer ve sag top havada
+## ~1 sn asili kalir. Bu yuzden takip boyunca sol top OLDUGU YERDE, hiziyla
+## birlikte dondurulur; kamera donmeye baslayinca kaldigi yerden devam eder.
+## Yorunge degismez, yalnizca zamanda kayar (iki top birbirinden bagimsiz).
+var _left_frozen := false
+var _left_freeze_pos := Vector3.ZERO
+var _left_freeze_vel := Vector3.ZERO
 var _applied_f := 0.0
 ## Top sabitlendi mi ((c) secenegi ya da ekran disi)
 var hold_right := false
@@ -78,6 +93,12 @@ func _ready() -> void:
 	# Burada sadece sahneden kameraya referans aliyor ve dinamik surukleme
 	# okunu kuruyoruz.
 	camera = $Camera3D
+	_bcam = BGosterimKamera.new()
+	_bcam.name = "BGosterimKamera"
+	add_child(_bcam)
+	_bcam.setup(cfg, camera, func() -> bool: return running)
+	_bcam.takip_sure_doldu.connect(_on_follow_timeout)
+	_bcam.donus_basladi.connect(_unfreeze_left)
 	drag_arrow = ForceArrow.new(Color(1.0, 1.0, 1.0), "surukle")
 	add_child(drag_arrow)
 	_build_hud()
@@ -182,6 +203,12 @@ func reset_sim() -> void:
 	backend.reset()
 	phase = Phase.READY
 	running = false
+	_launch_slow = false
+	_launch_elapsed = 0.0
+	_b_escaped = false
+	_left_frozen = false
+	if _bcam:
+		_bcam.reset()
 	choice = ""
 	f_real = 0.0
 	v_impact = 0.0
@@ -231,7 +258,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			_end_drag(event.position)
 
 
-func _process(_dt: float) -> void:
+func _process(dt: float) -> void:
+	if _launch_slow and running:
+		# gercek zaman: Engine.time_scale (agir cekim) bu sureyi uzatmasin
+		_launch_elapsed += dt / maxf(Engine.time_scale, 1e-6)
+		if _launch_elapsed >= cfg.firlatma_agir_cekim_suresi:
+			_launch_slow = false
 	if tool_active and drag_ball != "":
 		var p := _mouse_on_plane(get_viewport().get_mouse_position())
 		drag_arrow.global_position = drag_origin
@@ -300,12 +332,21 @@ func _slowmo() -> float:
 				and s.f_contact.y > 3.0 * s.mass * PhysicsBackend.GRAVITY.length()
 		if (s.touching_ground and (fast or pressing)) or (gap < 0.30 and s.velocity.y < -0.6):
 			f = cfg.agir_cekim_carpani
+	if _launch_slow:
+		f = minf(f, cfg.firlatma_agir_cekim_carpani)
 	return f
 
 
 func _after_step(step: float) -> void:
 	var sl := backend.get_state("left")
 	var sr := backend.get_state("right")
+
+	if _left_frozen:
+		# (b) kamera takibi: sol top bekletiliyor (bkz. _left_frozen)
+		backend.set_position("left", _left_freeze_pos)
+		backend.set_velocity("left", _left_freeze_vel)
+		sl.position = _left_freeze_pos
+		sl.velocity = _left_freeze_vel
 
 	# --- sol: gercek carpisma -------------------------------------------
 	if sl.just_hit_ground:
@@ -348,13 +389,29 @@ func _after_step(step: float) -> void:
 			elif phase == Phase.RESOLVED:
 				_apply_choice_force(sr)
 				(balls["right"] as Ball).play_impact(GROUND_Y, v_impact)
-		elif phase == Phase.RESOLVED and sr.position.y > cfg.ekrandan_cikis_yuksekligi:
+		elif phase == Phase.RESOLVED and sr.position.y > cfg.ekrandan_cikis_yuksekligi and not _b_escaped:
 			# (b) secenegi: top ekrani terk eder. Cikis hizindan tepe
 			# noktasini hesaplayip gosteriyoruz - yoksa sadece kaybolurdu.
+			_b_escaped = true
+			_launch_slow = false   # firlatma agir cekimi top ekrandan cikinca biter
 			var apex: float = sr.position.y + _rise_height(sr.velocity.y)
-			hold_pos = Vector3(HALF_X, cfg.ekrandan_cikis_yuksekligi, 0.0)
-			hold_right = true
 			hud.set_status("Sağdaki top ekrandan çıktı  -  tepe noktası yaklaşık %.0f m   (sol tarafta %.2f m)" % [apex, _rise_height(v_impact * cfg.restitution)])
+			if choice == "b" and (_b_mode == Sim2Config.BGosterim.KAMERA_TAKIP \
+					or _b_mode == Sim2Config.BGosterim.IKISI):
+				# Top TUTULMAZ, ucmaya devam eder; kamera onu tepeye kadar izler.
+				_bcam.start_follow(balls["right"])
+				_left_frozen = true
+				_left_freeze_pos = sl.position
+				_left_freeze_vel = sl.velocity
+			else:
+				hold_pos = Vector3(HALF_X, cfg.ekrandan_cikis_yuksekligi, 0.0)
+				hold_right = true
+		elif _bcam.is_following() and sr.velocity.y <= 0.0:
+			# Kamera takibinde tepe noktasi: topu orada tut (geri dusup yeniden
+			# "temas" tetiklemesin), kamera kisa bekleyip geri donsun.
+			hold_pos = sr.position
+			hold_right = true
+			_bcam.notify_apex(sr.position.y - cfg.radius)
 
 	if impulse_left > 0.0:
 		impulse_left -= _applied_f * step
@@ -417,6 +474,15 @@ func _on_choice(c: String) -> void:
 	_apply_choice_force(sr)
 	(balls["right"] as Ball).play_impact(GROUND_Y, v_impact)
 	_show_feedback()
+	if c == "b":
+		_b_mode = cfg.b_gosterim
+		# Firlatma agir cekimi SECIM ANINDA tetiklenir — _slowmo()'nun
+		# "zemine yaklasiyor ve asagi hizli" kosulu yukari firlayan topu
+		# yakalamiyor.
+		if _b_mode == Sim2Config.BGosterim.FIRLATMA_AGIR_CEKIM \
+				or _b_mode == Sim2Config.BGosterim.IKISI:
+			_launch_slow = true
+			_launch_elapsed = 0.0
 
 
 func _apply_choice_force(sr: PhysicsBackend.BodyState) -> void:
@@ -610,3 +676,21 @@ func _end_drag(screen_pos: Vector2) -> void:
 	drag_ball = ""
 	drag_arrow.set_force(Vector3.ZERO, cfg.ok_olcegi)
 	hud.set_status("%s topa %.0f N uygulandı (ok aracı)" % [label, force.length()])
+
+
+## Kamera takibinin ust suresi tepe noktasina varmadan doldu: topu oldugu
+## yerde tut (yoksa kamera donerken top ucmaya/geri dusmeye devam ederdi).
+func _on_follow_timeout() -> void:
+	var sr := backend.get_state("right")
+	hold_pos = sr.position
+	hold_right = true
+
+
+## Kamera ana poza donmeye basladi: sol top kaldigi yerden (ayni konum ve
+## hizla) devam etsin.
+func _unfreeze_left() -> void:
+	if not _left_frozen:
+		return
+	_left_frozen = false
+	backend.set_position("left", _left_freeze_pos)
+	backend.set_velocity("left", _left_freeze_vel)

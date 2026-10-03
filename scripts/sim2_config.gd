@@ -32,11 +32,12 @@ enum HavaModeli { GERCEKCI_KARE, GODOT_SONUM_DOGRUSAL, KAPALI }
 enum BGosterim { KAMERA_TAKIP, FIRLATMA_AGIR_CEKIM, IKISI, HICBIRI }
 
 @export_group("Fizik Motoru")
-## MUJOCO bulunamazsa (derlenmemişse) otomatik Yedek Çözücü'ye düşer.
+## Varsayılan: GODOT_MELEZ. MUJOCO bulunamazsa (derlenmemişse) otomatik
+## Yedek Çözücü'ye düşer.
 ## GODOT_MELEZ: uçuş Godot'nun RigidBody3D fiziğinde, temas + hava bizim
 ## modelimiz (scripts/godot_backend.gd). Oyun çalışırken değiştirilirse
 ## simülasyon otomatik sıfırlanır.
-@export var backend: Backend = Backend.MUJOCO
+@export var backend: Backend = Backend.GODOT_MELEZ
 ## Yalnızca Godot Melez: saniyedeki fizik adımı. Ağır çekimde (0.05) adım
 ## = (1/tik) × 0.05 → 120'de 0.42 ms, 8 ms'lik temas 18 adıma bölünür
 ## (hedef ≥ 15). Yükseltmek Yedek Çözücü'ye yaklaştırır (240'ta farklar

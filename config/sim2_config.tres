@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="Sim2Config" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="Sim2Config" load_steps=2 format=3 uid="uid://hfmwjqxl31cv"]
 
-[ext_resource type="Script" path="res://scripts/sim2_config.gd" id="1_0u0f2"]
+[ext_resource type="Script" uid="uid://bep8foovblmav" path="res://scripts/sim2_config.gd" id="1_0u0f2"]
 
 [resource]
 script = ExtResource("1_0u0f2")

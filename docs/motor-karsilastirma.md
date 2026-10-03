@@ -6,8 +6,8 @@ oyun çalışırken Godot editörünün *Remote* sekmesinden de değiştirilebil
 | Motor | Uçuş (yerçekimi + hava) | Zemin teması | Notlar |
 |---|---|---|---|
 | **MuJoCo** | MuJoCo | MuJoCo (`mujoco/scene.xml`) | Derlenmiş GDExtension gerekir. Bu makinede (macOS) derlenmediği için ölçülemedi. |
-| **Yedek Çözücü** | GDScript, yarı-örtük Euler, kare başına 40 alt adım | Yay–sönüm modeli (bizim) | MuJoCo yoksa varsayılan olarak kullanılan motor. |
-| **Godot Melez** | Godot'nun `RigidBody3D` fiziği | Yay–sönüm modeli (bizim), `_integrate_forces` içinde | Hava direnci ve temas yasası Yedek Çözücü ile **aynı sabitlerle**. Toplar Godot çarpışması yapmaz. |
+| **Yedek Çözücü** | GDScript, yarı-örtük Euler, kare başına 40 alt adım | Yay–sönüm modeli (bizim) | MuJoCo seçili ama derlenmemişse buna düşülür. |
+| **Godot Melez** | Godot'nun `RigidBody3D` fiziği | Yay–sönüm modeli (bizim), `_integrate_forces` içinde | **Varsayılan motor.** Hava direnci ve temas yasası Yedek Çözücü ile **aynı sabitlerle**. Toplar Godot çarpışması yapmaz. |
 
 Temas yasası her iki modelde de: `pen = (zemin + r) − y > 0` ise
 `N = max(0, k·pen − c·vy)`, `k = 1·10⁵ N/m`, `c` sekme katsayısından (e = 0.76) türetilir.

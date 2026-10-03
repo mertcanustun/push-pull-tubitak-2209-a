@@ -28,6 +28,11 @@ class BodyState extends RefCounted:
 	var just_hit_ground := false
 	## O temas boyunca biriken dusey impuls (N*s). "Gercek F" bundan cikar.
 	var contact_impulse := 0.0
+	## Son (ya da suren) temasin olcumleri - motor karsilastirmasi icin
+	## (docs/motor-karsilastirma.md). Yeni temas baslayinca sifirlanir.
+	var contact_step_count := 0      # temas suresince kac entegrasyon adimi
+	var contact_duration := 0.0      # simule saniye
+	var contact_peak := 0.0          # en buyuk N (Newton)
 
 
 ## Bir cismin tanimi.
@@ -93,6 +98,22 @@ func get_state(_id: String) -> BodyState:
 
 ## Tum cisimleri baslangic durumuna dondur.
 func reset() -> void:
+	pass
+
+## true ise cisimleri Godot'nun fizik motoru adimlar (GodotBackend); main.gd
+## bu durumda zamani Engine.time_scale ile yavaslatir ve top node'larinin
+## konumunu yazmaz. false ise step(dt) entegrasyonu kendisi yapar.
+func engine_driven() -> bool:
+	return false
+
+## Motor-surumlu arka uclar icin: simulasyon ilerlesin mi (Baslat/Duraklat,
+## secim ekrani). Diger arka uclarda main.gd step() cagirmayarak durdurur.
+func set_running(_on: bool) -> void:
+	pass
+
+## Arka uc degistirilirken / sahne kapanirken cagrilir; global ayarlari
+## (Engine.time_scale vb.) geri almak icin.
+func shutdown() -> void:
 	pass
 
 ## Yercekimi ve hava surtunmesi her iki arka uc icin de ayni formulle

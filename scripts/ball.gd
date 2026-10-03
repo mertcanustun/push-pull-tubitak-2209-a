@@ -27,6 +27,9 @@ class_name Ball
 @export_range(0.0, 1.0, 0.01) var pitch_range: float = 0.28
 
 var arrows: Dictionary = {}   # anahtar -> ForceArrow ("gravity", "drag", ...)
+## SERBEST modda (Godot Melez) her fizik adımının başında çağrılır —
+## hava direnci ve zemin temasını GodotBackend buradan uygular.
+var integrator: Callable = Callable()
 
 @onready var _mesh: MeshInstance3D = $Kure
 @onready var _shape: CollisionShape3D = $Sekil
@@ -53,6 +56,11 @@ func _apply_radius() -> void:
 	var pm := _dust.process_material as ParticleProcessMaterial
 	if pm:
 		pm.emission_sphere_radius = radius * 0.55
+
+
+func _integrate_forces(state: PhysicsDirectBodyState3D) -> void:
+	if integrator.is_valid():
+		integrator.call(state)
 
 
 ## Kukla modu: Godot fiziği kapalı, konum dışarıdan (backend) yazılır.

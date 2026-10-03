@@ -92,6 +92,11 @@ func step(dt: float) -> void:
 			if spec.collisions_enabled:
 				var penetration := (PhysicsBackend.GROUND_Y + spec.radius) - s.position.y
 				if penetration > 0.0:
+					if not touching and not was_touching and impulse == 0.0:
+						# yeni temas basliyor: olcumleri sifirla
+						s.contact_step_count = 0
+						s.contact_duration = 0.0
+						s.contact_peak = 0.0
 					touching = true
 					var fn: float = _stiffness[id] * penetration - _damping[id] * s.velocity.y
 					fn = maxf(fn, 0.0)   # zemin ceker degil, iter
@@ -99,6 +104,9 @@ func step(dt: float) -> void:
 					impulse += fn * h
 					if fn > contact_peak.y:
 						contact_peak = f_c
+					s.contact_step_count += 1
+					s.contact_duration += h
+					s.contact_peak = maxf(s.contact_peak, fn)
 
 			var f_total := f_g + f_d + f_c + s.f_external
 			var accel := f_total / spec.mass

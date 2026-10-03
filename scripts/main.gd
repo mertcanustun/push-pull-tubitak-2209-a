@@ -40,6 +40,8 @@ var v_impact := 0.0
 ## son kismi adim yuzunden her ziplamada fazladan enerji birikiyordu.
 var impulse_left := 0.0
 var impulse_force := 0.0
+## Godot Melez: impuls bitince dis kuvvet bir SONRAKI tikte sifirlanir.
+var _zero_ext_next := false
 var _applied_f := 0.0
 ## Top sabitlendi mi ((c) secenegi ya da ekran disi)
 var hold_right := false
@@ -79,8 +81,8 @@ func _ready() -> void:
 	drag_arrow = ForceArrow.new(Color(1.0, 1.0, 1.0), "surukle")
 	add_child(drag_arrow)
 	_build_hud()
+	_build_balls()     # önce toplar: Godot Melez motoru bu node'ları kullanıyor
 	_build_backend()
-	_build_balls()
 	reset_sim()
 	_last_backend = cfg.backend
 	cfg.changed.connect(_on_cfg_changed)
@@ -119,14 +121,16 @@ func _build_hud() -> void:
 ## Hangi fizik arka ucu kullanilsin: cfg.backend'den okunur (Inspector/Remote).
 ##   MUJOCO        - MuJoCo'yu zorla (yoksa GDScript cozucuye duser, uyari basar)
 ##   YEDEK_COZUCU  - MuJoCo derlenmis olsa bile GDScript cozucuyu kullan
-##   GODOT_MELEZ   - henuz uygulanmadi (Adim D) - uyariyla Yedek Cozucu'ye duser
+##   GODOT_MELEZ   - ucus Godot fiziginde, temas + hava bizim modelimiz
+##                   (scripts/godot_backend.gd)
 func _build_backend() -> void:
+	if backend:
+		backend.shutdown()   # onceki motorun global ayarlarini (time_scale vb.) geri al
 	match cfg.backend:
 		Sim2Config.Backend.YEDEK_COZUCU:
 			backend = NativeBackend.new()
 		Sim2Config.Backend.GODOT_MELEZ:
-			push_warning("Godot Melez motoru henüz uygulanmadı (Adım D) — Yedek Çözücü kullanılıyor.")
-			backend = NativeBackend.new()
+			backend = GodotBackend.new(cfg, {"left": $TopSol, "right": $TopSag})
 		_:  # Sim2Config.Backend.MUJOCO
 			var mj := MuJoCoBackend.new()
 			if mj.initialize():
@@ -149,10 +153,15 @@ func _build_backend() -> void:
 		spec.collisions_enabled = (side == "left")
 		backend.add_body(spec)
 
+	# MuJoCo / Yedek Cozucu: top KUKLA (Godot fizigi kapali, konum backend'den).
+	# Godot Melez: top SERBEST (Godot fizigi isler).
+	for side in balls:
+		(balls[side] as Ball).set_puppet(not backend.engine_driven())
+
 
 ## Toplar artık scenes/main.tscn içinde gerçek node (scenes/ball.tscn
-## örnekleri). MuJoCo / Yedek Çözücü modlarında KUKLA: Godot fiziği kapalı,
-## konum her karede backend'den yazılır (_sync_visuals).
+## örnekleri). Kukla mı serbest mi olacakları seçili motora bağlı
+## (_build_backend sonunda ayarlanır).
 func _build_balls() -> void:
 	balls["left"] = $TopSol
 	balls["right"] = $TopSag
@@ -160,7 +169,11 @@ func _build_balls() -> void:
 		var b: Ball = balls[side]
 		b.radius = cfg.radius
 		b.mass = cfg.mass
-		b.set_puppet(true)
+
+
+func _exit_tree() -> void:
+	if backend:
+		backend.shutdown()
 
 
 # ------------------------------------------------------------------- akis
@@ -175,6 +188,7 @@ func reset_sim() -> void:
 	impulse_left = 0.0
 	impulse_force = 0.0
 	_applied_f = 0.0
+	_zero_ext_next = false
 	pending_match = false
 	match_wait = 0.0
 	e_measured = 0.0
@@ -225,7 +239,9 @@ func _process(_dt: float) -> void:
 
 
 func _physics_process(delta: float) -> void:
-	if running and phase != Phase.CHOICE:
+	if backend.engine_driven():
+		_physics_process_engine(delta)
+	elif running and phase != Phase.CHOICE:
 		var step := delta * user_speed * _slowmo()
 		_pre_step(step)
 		backend.step(step)
@@ -234,10 +250,31 @@ func _physics_process(delta: float) -> void:
 	_update_readouts()
 
 
+## Godot Melez: adimlari fizik motoru atar. Bu tikin delta'si zaten
+## Engine.time_scale ile olceklenmis ve motorun bu tikte atacagi adimla
+## AYNI — o yuzden impuls hesabinda dogrudan delta kullanilir. Yavaslatma
+## (ve kullanici hiz kaydiricisi) Engine.time_scale'e yazilir; Godot bunu
+## bir sonraki karede uygular. Secim ekraninda / duraklatilinca bile
+## yazmaya devam ediyoruz ki devam edilince ilk adim hizli olmasin.
+func _physics_process_engine(delta: float) -> void:
+	var advancing := running and phase != Phase.CHOICE
+	if advancing:
+		_pre_step(delta)
+		backend.step(delta)
+		_after_step(delta)
+	Engine.time_scale = user_speed * _slowmo()
+	backend.set_running(running and phase != Phase.CHOICE)
+
+
 ## Bu karede verilecek kuvveti ayarla. Son (kismi) adimda kuvvet
 ## kucultulur ki toplam impuls tam olarak J = m*v*(1+e) olsun.
 func _pre_step(step: float) -> void:
 	_applied_f = 0.0
+	if _zero_ext_next:
+		# Godot Melez: impuls bir onceki tikte bitti; son parca o tikin motor
+		# adiminda uygulandi, simdi kuvveti kaldir (bkz. _after_step).
+		_zero_ext_next = false
+		backend.set_external_force("right", Vector3.ZERO)
 	if impulse_left > 0.0 and step > 0.0:
 		_applied_f = minf(impulse_force, impulse_left / step)
 		backend.set_external_force("right", Vector3(0.0, _applied_f, 0.0))
@@ -247,13 +284,21 @@ func _pre_step(step: float) -> void:
 ## yaklasirken zaman otomatik yavaslar.
 func _slowmo() -> float:
 	var f := 1.0
+	var engine := backend.engine_driven()
 	for side in ["left", "right"]:
 		var s := backend.get_state(side)
 		if s == null:
 			continue
 		var gap: float = s.position.y - cfg.radius - GROUND_Y
 		var fast := absf(s.velocity.y) > 0.6
-		if (s.touching_ground and fast) or (gap < 0.30 and s.velocity.y < -0.6):
+		# Godot Melez: temasin dip noktasinda hiz ~0 oldugu icin "fast" bir an
+		# duser; motor o an TEK bir buyuk adim (8 ms) atar ve temas bozulur.
+		# Bu modda temas kuvveti agirliktan belirgin buyukken de yavas kal
+		# (top yerde dururken N ~ m·g oldugu icin orada normal hiza doner).
+		# Diger modlarda davranis eskisiyle ayni.
+		var pressing: bool = engine and s.touching_ground \
+				and s.f_contact.y > 3.0 * s.mass * PhysicsBackend.GRAVITY.length()
+		if (s.touching_ground and (fast or pressing)) or (gap < 0.30 and s.velocity.y < -0.6):
 			f = cfg.agir_cekim_carpani
 	return f
 
@@ -315,7 +360,12 @@ func _after_step(step: float) -> void:
 		impulse_left -= _applied_f * step
 		if impulse_left <= 1e-9:
 			impulse_left = 0.0
-			backend.set_external_force("right", Vector3.ZERO)
+			if backend.engine_driven():
+				# Godot Melez'de motor adimi _after_step'ten SONRA gelir: kuvveti
+				# simdi sifirlarsak impulsun son parcasi hic uygulanmaz.
+				_zero_ext_next = true
+			else:
+				backend.set_external_force("right", Vector3.ZERO)
 
 
 ## v hızıyla yukarı fırlatılan topun ne kadar YÜKSELECEĞİ (m), seçili hava
@@ -477,7 +527,8 @@ func _sync_visuals() -> void:
 		var ball: Ball = balls[side]
 		if s == null or not is_instance_valid(ball):
 			continue
-		ball.global_position = s.position
+		if not backend.engine_driven():
+			ball.global_position = s.position   # kukla: konumu backend belirler
 		if ball.arrows.is_empty():
 			continue
 

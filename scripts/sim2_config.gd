@@ -32,9 +32,16 @@ enum HavaModeli { GERCEKCI_KARE, GODOT_SONUM_DOGRUSAL, KAPALI }
 
 @export_group("Fizik Motoru")
 ## MUJOCO bulunamazsa (derlenmemişse) otomatik Yedek Çözücü'ye düşer.
-## GODOT_MELEZ henüz uygulanmadı (Adım D) — seçilirse uyarıyla Yedek
-## Çözücü'ye düşülür.
+## GODOT_MELEZ: uçuş Godot'nun RigidBody3D fiziğinde, temas + hava bizim
+## modelimiz (scripts/godot_backend.gd). Oyun çalışırken değiştirilirse
+## simülasyon otomatik sıfırlanır.
 @export var backend: Backend = Backend.MUJOCO
+## Yalnızca Godot Melez: saniyedeki fizik adımı. Ağır çekimde (0.05) adım
+## = (1/tik) × 0.05 → 120'de 0.42 ms, 8 ms'lik temas 18 adıma bölünür
+## (hedef ≥ 15). Yükseltmek Yedek Çözücü'ye yaklaştırır (240'ta farklar
+## %2'nin altında) ama işlemciyi daha çok yorar. Değişiklik bir sonraki
+## motor seçiminde/başlatmada geçerli olur. Diğer motorlar 60'ta kalır.
+@export_range(60, 960, 60, "suffix:Hz") var godot_tik_sayisi: int = 120
 
 @export_group("Top")
 @export_range(0.05, 5.0, 0.001, "suffix:kg") var mass: float = 0.624
@@ -42,12 +49,10 @@ enum HavaModeli { GERCEKCI_KARE, GODOT_SONUM_DOGRUSAL, KAPALI }
 @export_range(0.0, 1.0, 0.01) var restitution: float = 0.76
 
 @export_group("Hava")
-## Yalnızca Yedek Çözücü/Godot Melez bu alanlara bakar (MuJoCo kendi
-## akışkan modelini kullanır, bkz. yukarıdaki not). GERCEKCI_KARE =
-## main.gd'nin bugünkü davranışı (PhysicsBackend.drag_force, kare bağıntı).
-## GODOT_SONUM_DOGRUSAL ve dogrusal_sonum alanı Adım D'de (GodotBackend)
-## devreye girecek; şimdilik yalnızca Inspector'da görünür, davranışı
-## değiştirmez (varsayılan GERCEKCI_KARE ile mevcut davranış korunuyor).
+## Uçuştaki hava direnci modeli. Godot Melez motoru üçünü de uygular ve
+## her adımda canlı okur. Yedek Çözücü her zaman GERCEKCI_KARE kullanır;
+## MuJoCo kendi akışkan modelini (bkz. yukarıdaki not). (b)'deki tepe
+## noktası yazısı her motorda bu seçime göre hesaplanır.
 @export var hava_modeli: HavaModeli = HavaModeli.GERCEKCI_KARE
 @export_range(0.0, 5.0, 0.001, "suffix:kg/m³") var hava_yogunlugu: float = 1.225
 @export_range(0.0, 2.0, 0.01) var drag_cd: float = 0.47

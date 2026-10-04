@@ -107,28 +107,61 @@ panelde ad kısaltılmış görünebilir).
 (~185 m) gösterir. Fark, takip sırasında büyük fizik adımlarından geliyor
 (bkz. `docs/motor-karsilastirma.md`). Yedek Çözücü'de ikisi 199–200 m.
 
-## 4. Sahnedeki nesneler: tıklayıp Inspector'dan değiştirilebilir
+## 4. Salon ve sahnedeki nesneler
+
+### 4a. Salon ayarları: `config/ortam_ayarlari.tres`
+
+Salonun (sahnedeki `Ortam` düğümü) **renkleri, ölçüleri, seyircisi, ışığı ve skorbord yazısı**
+bu dosyadan değiştirilir:
+
+1. **FileSystem** → `config/ortam_ayarlari.tres` dosyasına tek tıkla.
+2. Inspector'da değeri değiştir (alanın üstünde fareyi bekletince Türkçe açıklaması çıkar).
+3. Inspector'ın en üstündeki **"Salonu yeniden üret"** düğmesine bas → salon sahnede hemen yeniden kurulur.
+4. `main.tscn` editörde açıksa sekmesinde `(*)` görünür: **Cmd+S / Ctrl+S** ile sahneyi kaydet.
+   Ayar dosyasını da kaydet (Inspector'ın üstündeki disket simgesi ya da Cmd+S).
+5. ▶ ile dene.
+
+| Grup | İçindekiler (Inspector'da) | Varsayılan |
+|---|---|---|
+| Renkler | Parke Tonlari, Saha Cizgisi, Boyali Alan, Sol Bolge Rengi, Sag Bolge Rengi (saydamlık = rengin A değeri), Duvar, Serit, Tribun Basamaklari, Seyirci Formalari, Seyirci Ten, Pota Direk, Panya, Panya Isareti, Cember, File, Arka Plan | bugünkü salon; iki bölge de turuncu (%22 opak) |
+| Ölçüler | Dip Cizgi Z, Yan Cizgi X, Ucluk Yaricap, Ucluk Kose X, Boyali Alan Yari Genislik, Parke Yari Genislik, Tribun Sira Sayisi, Basamak Yuksekligi, Duvar Yuksekligi | -7.2 m, 7.5 m, 6.75 m, 6.6 m, 2.45 m, 10 m, 6 sıra, 0.42 m, 9 m |
+| Seyirci | Doluluk Orani, Seed Sayisi | 0.7 (%70), 2209 (aynı sayı → birebir aynı salon) |
+| Işık ve ortam | Tavan Isik Gucu / Rengi, Gunes Gucu / Rengi, Ortam Isik Rengi / Gucu, Sis Yogunlugu, Parlama, Parlama Siddeti, Parlama Yayilmasi | 0.6, 0.85, 0.55, 0.012, açık, 0.35, 0.03 |
+| Skorbord | Baslik, Alt Baslik | "ETKİ  –  TEPKİ", "Newton'un 3. yasası" |
+
+**Düğme çalışmazsa** (ör. Godot sürümü eski), terminalde proje klasöründe:
+`godot --path . -s tools/build_environment.gd` (⚠️ `--headless` **ekleme**: headless'ta parke ve
+seyirci yazılmıyor). Sonra Godot'da sahneyi yeniden yükle.
+
+### 4b. Sahnedeki nesneler: tıklayıp Inspector'dan değiştirilebilir
 
 **Scene** panelinde (Remote değil, normal **Local** sekmesi) `Main`'in altında:
 
 | Düğüm | İçinde | Değiştirilebilecekler |
 |---|---|---|
-| `Ortam/Parke` | `Tahtalar` (tek bir çoklu-örnek nesne) | (toplu renk; tek tek değil) |
-| `Ortam/Bolgeler` | `Bolge1` (sol), `Bolge2` (sağ) yarı saydam bölgeler, **ikisi de turuncu** (Defne'nin seçimi) | Malzeme → Albedo rengi ve saydamlık |
-| `Ortam/SahaCizgileri` | `DipCizgi`, `YanCizgiSol/Sag`, `BoyaliAlan`, serbest atış ve üçlük çizgileri | renk, `BoyaliAlan` rengi |
-| `Ortam/Pota` | `Taban`, `Direk`, `Kol`, `Panya`, `Cember`, `File` | renkler |
-| `Ortam/Tribun` | `Basamak0…5` + `SeyirciGovde` / `SeyirciKafa` | basamak renkleri |
-| `Ortam/Duvarlar` | `ArkaDuvar`, `YanDuvarSol/Sag`, `Serit…`, `Flama…` | renkler |
-| `Ortam/Skorbord` | `Kasa`, `Ekran`, `Baslik`, `AltBaslik` | **Text** alanı (ör. "ETKİ – TEPKİ"), renk, boyut |
-| `Ortam/TavanIsiklari` | 3 ışık (`Tavan_-4_-3`, `Tavan_4_-3`, `Tavan_0_-8`) | **Energy** (parlaklık), renk |
-| `WorldEnvironment` | arka plan, ortam ışığı, sis, parlama | Environment → Background color, Ambient light energy, Fog density, Glow |
-| `Sun` | ana ışık | Energy, renk (gölge web'deki bir hata yüzünden bilerek kapalı) |
+| `Ortam/Parke` | `Tahtalar` (tek bir çoklu-örnek nesne) | → §4a (Parke Tonlari) |
+| `Ortam/Bolgeler` | `Bolge1` (sol), `Bolge2` (sağ) yarı saydam bölgeler, **ikisi de turuncu** (Defne'nin seçimi) | → §4a (Sol/Sag Bolge Rengi) |
+| `Ortam/SahaCizgileri` | `DipCizgi`, `YanCizgiSol/Sag`, `BoyaliAlan`, serbest atış ve üçlük çizgileri | → §4a (renk ve ölçüler) |
+| `Ortam/Pota` | `Taban`, `Direk`, `Kol`, `Panya`, `Cember`, `File` | → §4a (renkler) |
+| `Ortam/Tribun` | `Basamak0…5` + `SeyirciGovde` / `SeyirciKafa` | → §4a (renkler, sıra sayısı, doluluk) |
+| `Ortam/Duvarlar` | `ArkaDuvar`, `YanDuvarSol/Sag`, `Serit…`, `Flama…` | → §4a (renkler, yükseklik) |
+| `Ortam/Skorbord` | `Kasa`, `Ekran`, `Baslik`, `AltBaslik` | → §4a (Baslik, Alt Baslik) |
+| `Ortam/TavanIsiklari` | 3 ışık (`Tavan_-4_-3`, `Tavan_4_-3`, `Tavan_0_-8`) | → §4a (güç, renk) |
+| `Ortam/ElleEklenenler` | (boş) | **Salona elle eklediğin her şey buraya.** Yeniden üretim bu düğüme dokunmaz. |
+| `WorldEnvironment` | arka plan, ortam ışığı, sis, parlama | → §4a (Işık ve ortam). Doğrudan değiştirirsen yeniden üretimde silinir. |
+| `Sun` | ana ışık | → §4a (Gunes Gucu / Rengi). Gölge web'deki bir hata yüzünden bilerek kapalı. |
 | `Camera3D` | ana kamera | ⚠️ Dokunma: (b) kamera takibi buraya geri dönüyor |
 | `TopSol`, `TopSag` | toplar (`ball.tscn`, birer `RigidBody3D`) | Inspector'ın en üstünde **"Fizik → sim2_config.tres"** başlığı var. Değiştirilebilecekler: alt düğümlerde doku (`Kure`), toz (`Toz`), ses (`Ses`), ok renkleri (`Oklar/…`); topun kendisinde **Çarpma sesi** grubu. ⚠️ **RigidBody3D bölümündeki Mass / Physics Material / Gravity Scale / Linear-Angular Damp alanlarına ve "Boyut → Radius"a dokunma**: MuJoCo ve Yedek Çözücü modlarında top Godot'ta "dondurulmuş kukla"dır ve bu alanlar hiçbir şeyi değiştirmez; Godot Melez'de ise her sıfırlamada `sim2_config.tres`'ten yeniden yazılır. Fizik ayarı **yalnızca** ayar dosyasından yapılır. |
 
-⚠️ **Önemli: salonu nereden değiştirirsin:** `Ortam` bir üretici betikle (`tools/build_environment.gd`)
-oluşturuluyor ve betik tekrar çalıştığında `Ortam`'ı baştan kurar. `Ortam`'ın alt düğümlerinde
-doğrudan yaptığın değişiklikler yeniden üretimde **silinir**. Kalıcı değişiklik için Defne'ye haber ver.
+⚠️ **Önemli: salonu nereden değiştirirsin:** `Ortam` bir üretici betikle (`tools/ortam_uretici.gd`)
+oluşturuluyor; "Salonu yeniden üret" düğmesi ya da `tools/build_environment.gd` her çalıştığında
+`Ortam`'ı baştan kurar. Bu yüzden:
+- **Renk, ölçü, seyirci doluluğu, ışık, skorbord yazısı** → `config/ortam_ayarlari.tres` (§4a). Değişiklik
+  kalıcıdır, yeniden üretimde kaybolmaz.
+- **Salona yeni bir şey eklemek** (ör. bir afiş, ek bir obje) → mutlaka `Ortam/ElleEklenenler` düğümünün
+  **içine** ekle (düğüme sağ tık → *Add Child Node*). Yeniden üretim bu düğümü ve içindekileri olduğu gibi korur.
+- `Ortam`'ın **diğer** alt düğümlerinde (ve `WorldEnvironment` / `Sun`'da) doğrudan yaptığın değişiklikler
+  yeniden üretimde **silinir**.
 
 ## 5. Kontrol listesi: her yeni sürümde bak
 

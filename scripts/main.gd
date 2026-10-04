@@ -452,12 +452,14 @@ func _rise_height(v: float) -> float:
 func _enter_choice(sl: PhysicsBackend.BodyState, sr: PhysicsBackend.BodyState) -> void:
 	phase = Phase.CHOICE
 	v_impact = absf(sr.velocity.y)
-	# Iki topu da tam temas noktasina oturt ki karsilastirma adil olsun.
-	for side in ["left", "right"]:
-		var x: float = -HALF_X if side == "left" else HALF_X
-		backend.set_position(side, Vector3(x, GROUND_Y + cfg.radius, 0.0))
-	sl.position.y = GROUND_Y + cfg.radius
-	sr.position.y = GROUND_Y + cfg.radius
+	# Sagdaki topu soldakiyle AYNI yukseklige koy ki karsilastirma adil olsun.
+	# Soldaki top YERINDE kalir: bu adimda zemine en fazla bir adimlik yol
+	# (~3 mm) girmis ve temas kuvveti bir sonraki adim icin hesaplanmis
+	# olabilir. Onu yukari oturtmak temasi bozuyordu (Godot Melez'de ilk
+	# kosuyla sonraki kosularin sekmesi %10 farkliydi).
+	var p := Vector3(HALF_X, sl.position.y, sl.position.z)
+	backend.set_position("right", p)
+	sr.position = p
 	# Gercek tepki kuvveti: J = m·v·(1+e) = F·T
 	f_real = cfg.mass * v_impact * (1.0 + cfg.restitution) / cfg.temas_suresi
 	hud.show_choice(true)

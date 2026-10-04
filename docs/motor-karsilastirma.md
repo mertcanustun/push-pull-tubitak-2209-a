@@ -9,6 +9,20 @@ oyun çalışırken Godot editörünün *Remote* sekmesinden de değiştirilebil
 | **Yedek Çözücü** | GDScript, yarı-örtük Euler, kare başına 40 alt adım | Yay–sönüm modeli (bizim) | MuJoCo seçili ama derlenmemişse buna düşülür. |
 | **Godot Melez** | Godot'nun `RigidBody3D` fiziği | Yay–sönüm modeli (bizim), `_integrate_forces` içinde | **Varsayılan motor.** Hava direnci ve temas yasası Yedek Çözücü ile **aynı sabitlerle**. Toplar Godot çarpışması yapmaz. |
 
+**Godot'nun kendi 3B fizik motoru** (Project Settings → Physics → 3D → Physics Engine):
+`DEFAULT` = **Godot Physics** (Jolt seçili değil). Godot Melez yalnızca uçuşu (yerçekimi +
+hız/konum entegrasyonu) Godot'ya bıraktığı için motorun çarpışma çözücüsü hiç kullanılmıyor.
+
+| Ayar | Değer | Web export'ta (Godot Melez) |
+|---|---|---|
+| Physics Engine (3D) | DEFAULT → Godot Physics | Çalışıyor: (a) sol/sağ 1.519 / 1.519, 0.826 / 0.826 m, konum farkı 0.0 mm; (b) 1239 m/s, yazılan tepe ~196 m; (c) top duruyor |
+
+Web testi: proje kopyasına geçici bir autoload eklenip `Web` ön ayarıyla dışa aktarıldı, sonra
+headless Chrome'da çalıştırıldı (2026-10-04). Web'de kare hızı sabit olmadığından ağır çekimin
+başladığı an biraz kayıyor; (a)'daki ilk sekme masaüstünde 1.55–1.60 m, web'de 1.52 m.
+İki topun birebir aynı olması her durumda korunuyor. Dışa aktarmadaki tek uyarı MuJoCo eklentisi
+için (web'de zaten yok, Godot Melez ya da Yedek Çözücü kullanılır).
+
 Temas yasası her iki modelde de: `pen = (zemin + r) − y > 0` ise
 `N = max(0, k·pen − c·vy)`, `k = 1·10⁵ N/m`, `c` sekme katsayısından (e = 0.76) türetilir.
 

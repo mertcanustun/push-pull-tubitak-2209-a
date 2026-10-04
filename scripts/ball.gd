@@ -21,8 +21,10 @@ class_name Ball
 # Kısa tutuldu: varsayılan Inspector genişliğinde ~26 karakter görünüyor.
 @export_category("Fizik → sim2_config.tres")
 
-## Yarıçap (m). main.gd bunu cfg.radius ile eşitler — küre, çarpışma şekli
-## ve toz yayılım yarıçapı birlikte güncellenir.
+@export_group("Boyut")
+
+## Yarıçap (m). DEĞİŞTİRMEYİN: her Sıfırla'da sim2_config.tres → Top →
+## Radius'tan yazılır. Küre, çarpışma şekli ve toz yayılımı birlikte güncellenir.
 @export_range(0.01, 1.0, 0.001, "suffix:m") var radius: float = 0.119:
 	set(v):
 		if v == radius:
@@ -34,8 +36,11 @@ class_name Ball
 @export_group("Çarpma sesi")
 ## Bu hızda (m/s) çarpma sesi tam şiddette çalar; daha yavaşta kısılır.
 @export_range(0.5, 30.0, 0.1, "suffix:m/s") var impact_full_speed: float = 7.0
+## Yavaş çarpmalarda bile sesin en az bu şiddette (0–1) çalması.
 @export_range(0.0, 1.0, 0.01) var impact_min_volume: float = 0.12
+## Sesin en düşük perdesi (1 = kaydın kendisi). Yavaş çarpmada bu duyulur.
 @export_range(0.1, 2.0, 0.01) var pitch_min: float = 0.88
+## Hızlı çarpmada perdenin ne kadar yükseleceği (en düşük perdenin üstüne).
 @export_range(0.0, 1.0, 0.01) var pitch_range: float = 0.28
 
 var arrows: Dictionary = {}   # anahtar -> ForceArrow ("gravity", "drag", ...)

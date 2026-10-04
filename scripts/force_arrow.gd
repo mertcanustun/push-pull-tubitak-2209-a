@@ -10,10 +10,13 @@ const HEAD_RADIUS := 0.055
 const HEAD_LENGTH := 0.16
 const MIN_LENGTH := 0.10
 
+@export_group("Ok")
+## Okun yanındaki kısa ad (G, Fs, N, F, Fnet …). Değer kodla eklenir.
 @export var label_text := ""
 var show_label := true
 ## Etiketler birbirinin uzerine binmesin diye her oka farkli bir kaldirma.
 var label_lift := 0.0
+## Okun rengi (gövde, uç ve yazı). Ok renkleri HUD açıklamasıyla aynı kalmalı.
 @export var color := Color.WHITE : set = _set_color
 
 var _shaft: MeshInstance3D

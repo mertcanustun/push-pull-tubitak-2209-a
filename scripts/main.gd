@@ -16,6 +16,9 @@ extends Node3D
 ## artık burada SABİT DEĞİL — res://config/sim2_config.tres içinde (kod
 ## yazmadan Inspector'dan, hatta oyun ÇALIŞIRKEN "Remote" sekmesinden
 ## değiştirilir). Bkz. scripts/sim2_config.gd.
+@export_group("Ayarlar")
+## Tüm simülasyon ayarları (config/sim2_config.tres). Oyun çalışırken Remote
+## sekmesinde buradan canlı değiştirilebilir.
 @export var cfg: Sim2Config = preload("res://config/sim2_config.tres")
 
 const DROP_HEIGHT := 3.0

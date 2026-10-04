@@ -9,18 +9,19 @@ extends Resource
 ##
 ## CANLI DÜZENLEME (oyun ÇALIŞIRKEN): Godot editöründe alttaki "Remote"
 ## sekmesine geç, sahne ağacında "Main" node'unu seç, Inspector'da "Cfg"
-## alanını aç — oyunu durdurmadan değerleri değiştirip anlık etkisini
-## görebilirsin (ör. Sekme'yi 0.76 → 0.5 yapıp sol topun daha az sektiğini
-## izle). main.gd her kare DOĞRUDAN bu kaynaktan okur, değerleri kendi
-## sabitlerine kopyalamaz — bu yüzden Remote'tan değişiklik anında işler.
+## alanını aç — oyunu durdurmadan değerleri değiştirebilirsin.
+##   - Top / Hava / Temas grupları: bir sonraki Sıfırla'da (R) işler
+##     (ör. Restitution'ı 0.76 → 0.5 yap, R'ye bas, sol top daha az seker).
+##   - Fizik Motoru: değişince sahne kendiliğinden sıfırlanır.
+##   - Seçenekler / Görsel / (b) gösterimi / Hava Modeli: anında işler.
 ##
 ## ÖNEMLİ — MuJoCo motoru hakkında: aşağıdaki Top/Hava/Temas değerleri
 ## MuJoCo seçiliyken yalnızca GDScript tarafındaki kayıtları (ok büyüklüğü,
 ## panel yazıları) günceller. MuJoCo'nun KENDİ fiziği res://mujoco/scene.xml
 ## dosyasından sabit okunur ve BU KAYNAKTAN ETKİLENMEZ (MJCF ayrı bir motor,
 ## kendi dosyasıyla tanımlı). "Sekmeyi değiştir, azaldığını gör" gibi canlı
-## bir demo için Fizik Motoru'nu Yedek Çözücü'ye almalısın — o motor her
-## değeri doğrudan bu kaynaktan okur.
+## bir demo için Fizik Motoru Godot Melez (varsayılan) ya da Yedek Çözücü
+## olmalı — bu ikisi her değeri bu kaynaktan okur.
 ##
 ## TİP NOTU: alanlar bilerek `: float = ...` ile yazıldı (`:=` değil) —
 ## başka scriptlerden "cfg.mass" gibi okunduğunda statik tip çıkarımı
@@ -46,8 +47,13 @@ enum BGosterim { KAMERA_TAKIP, FIRLATMA_AGIR_CEKIM, IKISI, HICBIRI }
 @export_range(60, 960, 60, "suffix:Hz") var godot_tik_sayisi: int = 120
 
 @export_group("Top")
+## Kütle (kg). NBA topu 0.624 kg. Ağırlık oku (G) ve zemin kuvveti bununla
+## orantılı değişir. Sıfırla'da işler.
 @export_range(0.05, 5.0, 0.001, "suffix:kg") var mass: float = 0.624
+## Yarıçap (m). Topun görünen boyu da bundan gelir. Sıfırla'da işler.
 @export_range(0.01, 1.0, 0.001, "suffix:m") var radius: float = 0.119
+## Sekme katsayısı: 0 = hiç sekmez, 1 = kayıpsız seker. 0.76'da 3 m'den
+## bırakılan top ~1.5 m'ye seker. Sıfırla'da işler.
 @export_range(0.0, 1.0, 0.01) var restitution: float = 0.76
 
 @export_group("Hava")
@@ -56,9 +62,15 @@ enum BGosterim { KAMERA_TAKIP, FIRLATMA_AGIR_CEKIM, IKISI, HICBIRI }
 ## MuJoCo kendi akışkan modelini (bkz. yukarıdaki not). (b)'deki tepe
 ## noktası yazısı her motorda bu seçime göre hesaplanır.
 @export var hava_modeli: HavaModeli = HavaModeli.GERCEKCI_KARE
+## Hava yoğunluğu (deniz seviyesi 1.225). Artırınca hava direnci (mavi Fs
+## oku) büyür. Sıfırla'da işler.
 @export_range(0.0, 5.0, 0.001, "suffix:kg/m³") var hava_yogunlugu: float = 1.225
+## Sürüklenme katsayısı (Cd). Küre için 0.47. Etkisi hava yoğunluğu gibi.
+## Sıfırla'da işler.
 @export_range(0.0, 2.0, 0.01) var drag_cd: float = 0.47
-@export_range(0.0, 5.0, 0.001) var dogrusal_sonum: float = 0.449   ## karşılaştırma için — aynı limit hıza göre ayarlı
+## Yalnızca Hava Modeli = GODOT_SONUM_DOGRUSAL iken kullanılır (karşılaştırma
+## için; gerçekçi modelle aynı limit hıza göre ayarlı). Diğer modellerde etkisiz.
+@export_range(0.0, 5.0, 0.001) var dogrusal_sonum: float = 0.449
 
 @export_group("Temas")
 ## Seçim kuvvetinin (a/b/c) uygulandığı varsayımsal temas süresi — J = F·T
@@ -71,12 +83,20 @@ enum BGosterim { KAMERA_TAKIP, FIRLATMA_AGIR_CEKIM, IKISI, HICBIRI }
 @export_range(1.0e3, 1.0e6, 1.0, "suffix:N/m") var sertlik: float = 1.0e5
 
 @export_group("Seçenekler")
-## (b) seçeneğinde zeminin uyguladığı "yanlış" kuvvet çarpanı.
+## (b) seçeneğinde zeminin uyguladığı "yanlış" kuvvet çarpanı. Senaryo
+## planında 100. 10'da bile top ekrandan çıkar (~84 m tepe); 2'de de çıkar.
+## Top yalnızca 1'de ekranda kalır.
 @export_range(1.0, 500.0, 1.0, "suffix:×") var b_carpani: float = 100.0
 
 @export_group("Görsel")
+## Okların genel boyu. Ölçek logaritmik: küçük ve dev kuvvetler aynı ekrana
+## sığsın diye. Oklar ekrandan taşıyorsa küçült.
 @export_range(0.05, 2.0, 0.01) var ok_olcegi: float = 0.36
+## Top zemine yaklaşırken/temas ederken zaman ne kadar yavaşlasın
+## (0.05 = 20 kat yavaş).
 @export_range(0.001, 1.0, 0.001) var agir_cekim_carpani: float = 0.05
+## (b)'de top bu yüksekliği geçince "ekrandan çıktı" sayılır ve tepe noktası
+## yazısı çıkar.
 @export_range(1.0, 50.0, 0.5, "suffix:m") var ekrandan_cikis_yuksekligi: float = 9.0
 
 @export_group("(b) gösterimi")
@@ -100,7 +120,10 @@ enum BGosterim { KAMERA_TAKIP, FIRLATMA_AGIR_CEKIM, IKISI, HICBIRI }
 ## Kamera en fazla bu yüksekliğe kadar çıkar; top daha yükseğe giderse
 ## kadrajdan çıkar ama yükseklik göstergesi saymaya devam eder.
 @export_range(10.0, 2000.0, 5.0, "suffix:m") var kamera_takip_max_yukseklik: float = 250.0
+## Kamera tepe noktasında bu kadar bekler (gerçek saniye).
 @export_range(0.0, 5.0, 0.1, "suffix:sn") var kamera_tepe_bekleme: float = 1.0
+## Kameranın ana konumuna dönüş süresi (gerçek saniye). Sonunda BİREBİR eski
+## konumda durur.
 @export_range(0.1, 5.0, 0.1, "suffix:sn") var kamera_donus_suresi: float = 1.5
 ## Takip sırasında topun yanında yükseklik cetveli: her 1 m'de çentik, bu
 ## aralıkta etiket. Kadraj dikeyde ~5 m gösterir; 5 m'de her an bir etiket görünür.

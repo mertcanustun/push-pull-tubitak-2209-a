@@ -48,6 +48,12 @@ var _v_prev: Dictionary = {}     # id -> Vector3 (önceki geri çağrıdaki hız
 var _mirror_src := ""
 var _mirror_dst := ""
 var _active := true
+var _held_vel: Dictionary = {}   # id -> Vector3 (duraklatılmışken saklanan hız)
+## (a): devamdan sonraki İLK geri çağrıda hedef, kaynağın adım sonu durumuna
+## eşitlenir. Dondurulmuşken hedefe konum/hız yazmak onun bekleyen kuvvetini
+## (hava direnci) siliyor, kaynağınki kalıyor; ilk adımda 0.0005 m/s'lik fark
+## sekmelerde 1 mm'ye büyüyordu.
+var _mirror_sync := false
 var _saved_ticks := 60
 
 
@@ -106,6 +112,7 @@ func _reset_body(spec: PhysicsBackend.BodySpec) -> void:
 	b.global_transform = Transform3D(Basis(), spec.position)
 	b.linear_velocity = spec.velocity
 	b.angular_velocity = Vector3.ZERO
+	_held_vel[spec.id] = spec.velocity
 
 
 ## Godot'nun fiziğe giren alanlarını bizim modele göre sabitler.
@@ -131,6 +138,7 @@ func _apply_body_fields(b: RigidBody3D, spec: PhysicsBackend.BodySpec) -> void:
 func reset() -> void:
 	_mirror_src = ""
 	_mirror_dst = ""
+	_mirror_sync = false
 	for id in _specs:
 		_reset_body(_specs[id])
 	set_running(false)
@@ -157,11 +165,26 @@ func _gravity() -> Vector3:
 	return dir * g
 
 
+## Duraklatma (READY / CHOICE): yalnızca İKİ TOP dondurulur, hızları saklanır.
+## (Önceden PhysicsServer3D.set_active(false) ile bütün fizik sunucusu
+## durduruluyordu; birkaç durdur/devam döngüsünden sonra motor Output'a
+## 'Condition "p_elem->_root" is true' hatası basıyordu.)
 func set_running(on: bool) -> void:
-	if on == _active:
-		return
 	_active = on
-	PhysicsServer3D.set_active(on)
+	var resumed := false
+	for id in _bodies:
+		var b: RigidBody3D = _bodies[id]
+		if on and b.freeze:
+			resumed = true
+			b.freeze = false
+			b.linear_velocity = _held_vel.get(id, Vector3.ZERO)
+			b.angular_velocity = Vector3.ZERO
+		elif not on and not b.freeze:
+			_held_vel[id] = b.linear_velocity
+			b.freeze_mode = RigidBody3D.FREEZE_MODE_KINEMATIC
+			b.freeze = true
+	if resumed and _mirror_dst != "":
+		_mirror_sync = true
 
 
 func shutdown() -> void:
@@ -169,7 +192,6 @@ func shutdown() -> void:
 		var b: RigidBody3D = _bodies[id]
 		if is_instance_valid(b):
 			b.set("integrator", Callable())
-	PhysicsServer3D.set_active(true)
 	_active = true
 	Engine.time_scale = 1.0
 	Engine.physics_ticks_per_second = _saved_ticks
@@ -193,6 +215,8 @@ func set_velocity(id: String, vel: Vector3) -> void:
 	var b: RigidBody3D = _bodies.get(id)
 	if b:
 		b.linear_velocity = vel
+		if b.freeze:
+			_held_vel[id] = vel   # devam edince bu hızla başlasın
 	_v_prev[id] = vel   # dışarıdan atanan hız Fnet'te sahte sıçrama yaratmasın
 	var s: PhysicsBackend.BodyState = _state.get(id)
 	if s:
@@ -208,6 +232,16 @@ func _integrate(id: String, st: PhysicsDirectBodyState3D) -> void:
 	var spec: PhysicsBackend.BodySpec = _specs.get(id)
 	if spec == null:
 		return
+	if (_bodies[id] as RigidBody3D).freeze:
+		return   # duraklatılmış: ölçüm/kuvvet yok (bkz. set_running)
+	if _mirror_sync and id == _mirror_dst:
+		_mirror_sync = false
+		var ss0 := PhysicsServer3D.body_get_direct_state((_bodies[_mirror_src] as RigidBody3D).get_rid())
+		if ss0:
+			st.linear_velocity = ss0.linear_velocity
+			var t := st.transform
+			t.origin.y = ss0.transform.origin.y
+			st.transform = t
 	var s: PhysicsBackend.BodyState = _state[id]
 	var dt := st.step
 

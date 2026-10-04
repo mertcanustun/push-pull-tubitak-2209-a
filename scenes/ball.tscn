@@ -55,6 +55,7 @@ material = SubResource("StandardMaterial3D_tfr1k")
 size = Vector2(0.095, 0.095)
 
 [node name="Top" type="RigidBody3D"]
+editor_description = "Fizik ayarları (kütle, sekme, hava, temas) burada DEĞİL: config/sim2_config.tres. Bu topun Mass/Damp/Physics Material alanlarını değiştirmeyin."
 collision_layer = 2
 collision_mask = 0
 mass = 0.624

@@ -27,6 +27,11 @@ func is_available() -> bool:
 
 func add_body(spec: PhysicsBackend.BodySpec) -> void:
 	super.add_body(spec)
+	_reset_body(spec)
+
+
+## reset()'te de cagrilir: spec main.gd tarafindan cfg'den tazelenmis olabilir.
+func _reset_body(spec: PhysicsBackend.BodySpec) -> void:
 	# Temas modeli: k sabit secilir, c geri tepme katsayisindan tureitilir.
 	# zeta = -ln(e) / sqrt(pi^2 + ln(e)^2),  c = 2*zeta*sqrt(k*m)
 	var k := spec.stiffness
@@ -35,10 +40,6 @@ func add_body(spec: PhysicsBackend.BodySpec) -> void:
 	var zeta := -ln_e / sqrt(PI * PI + ln_e * ln_e)
 	_stiffness[spec.id] = k
 	_damping[spec.id] = 2.0 * zeta * sqrt(k * spec.mass)
-	_reset_body(spec)
-
-
-func _reset_body(spec: PhysicsBackend.BodySpec) -> void:
 	var s := PhysicsBackend.BodyState.new()
 	s.position = spec.position
 	s.velocity = spec.velocity

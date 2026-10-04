@@ -71,6 +71,18 @@ func engine_driven() -> bool:
 
 func add_body(spec: PhysicsBackend.BodySpec) -> void:
 	super.add_body(spec)
+	var b: RigidBody3D = _bodies[spec.id]
+	var id: String = spec.id
+	b.set("integrator", func(st: PhysicsDirectBodyState3D) -> void: _integrate(id, st))
+	_ext[spec.id] = Vector3.ZERO
+	_reset_body(spec)
+
+
+## TEK DOĞRULUK KAYNAĞI: her reset'te topun RigidBody fizik alanları
+## spec'ten (main.gd onu her reset_sim()'de Sim2Config'ten tazeler) yeniden
+## yazılır. Inspector'da topa elle girilen Mass/Damp/Physics Material ikinci
+## bir değer oluşturamaz — ilk Sıfırla'da cfg değerine döner.
+func _reset_body(spec: PhysicsBackend.BodySpec) -> void:
 	# NativeBackend ile aynı temas modeli: k seçilir, c sekmeden türetilir.
 	var k := spec.stiffness
 	var e: float = clampf(spec.restitution, 0.01, 0.99)
@@ -78,24 +90,8 @@ func add_body(spec: PhysicsBackend.BodySpec) -> void:
 	var zeta := -ln_e / sqrt(PI * PI + ln_e * ln_e)
 	_stiffness[spec.id] = k
 	_damping[spec.id] = 2.0 * zeta * sqrt(k * spec.mass)
+	_apply_body_fields(_bodies[spec.id], spec)
 
-	var b: RigidBody3D = _bodies[spec.id]
-	b.mass = spec.mass
-	b.gravity_scale = 1.0
-	# Projenin varsayılan sönümü (0.1) de etkilemesin: REPLACE + 0.
-	b.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
-	b.linear_damp = 0.0
-	b.angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
-	b.angular_damp = 0.0
-	b.collision_mask = 0
-	b.can_sleep = false
-	var id: String = spec.id
-	b.set("integrator", func(st: PhysicsDirectBodyState3D) -> void: _integrate(id, st))
-	_ext[spec.id] = Vector3.ZERO
-	_reset_body(spec)
-
-
-func _reset_body(spec: PhysicsBackend.BodySpec) -> void:
 	var s := PhysicsBackend.BodyState.new()
 	s.position = spec.position
 	s.velocity = spec.velocity
@@ -110,6 +106,26 @@ func _reset_body(spec: PhysicsBackend.BodySpec) -> void:
 	b.global_transform = Transform3D(Basis(), spec.position)
 	b.linear_velocity = spec.velocity
 	b.angular_velocity = Vector3.ZERO
+
+
+## Godot'nun fiziğe giren alanlarını bizim modele göre sabitler.
+func _apply_body_fields(b: RigidBody3D, spec: PhysicsBackend.BodySpec) -> void:
+	b.mass = spec.mass
+	b.gravity_scale = 1.0
+	# Projenin varsayılan sönümü (0.1) de etkilemesin: REPLACE + 0. Hava
+	# direnci bizim modelimizden gelir (Sim2Config → Hava).
+	b.linear_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	b.linear_damp = 0.0
+	b.angular_damp_mode = RigidBody3D.DAMP_MODE_REPLACE
+	b.angular_damp = 0.0
+	# Sekme Godot çarpışmasından değil yay-sönüm temasımızdan gelir.
+	b.physics_material_override = null
+	b.collision_mask = 0
+	b.center_of_mass_mode = RigidBody3D.CENTER_OF_MASS_MODE_AUTO
+	b.inertia = Vector3.ZERO
+	b.can_sleep = false
+	if b is Ball:
+		(b as Ball).radius = spec.radius
 
 
 func reset() -> void:

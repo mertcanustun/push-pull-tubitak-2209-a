@@ -111,15 +111,10 @@ func _ready() -> void:
 
 
 ## cfg Inspector'dan ya da ÇALIŞIRKEN "Remote" sekmesinden değişince tetiklenir.
-## Yalnızca Fizik Motoru değiştiyse otomatik _build_backend()+reset_sim()
-## yapılır. BİLİNEN SINIR: kütle/sekme/hava gibi diğer alanlar bir sonraki
-## Sıfırla/R basışında GÜNCELLENMEZ — backend.reset() mevcut BodySpec
-## nesnelerini (cfg'nin o anki değil, _build_backend() çağrıldığı andaki
-## anlık görüntüsünü) yeniden kullanır. MuJoCo motorunu her Sıfırla'da
-## tazelemek (XML'i yeniden yüklemek) kaynak sızıntısı riski taşıdığı için
-## bilerek yapılmadı. Canlı "sekmeyi değiştir, azaldığını gör" demosu için:
-## değeri değiştir, Fizik Motoru'nu bir kez başka bir seçeneğe alıp geri al
-## (bu, _build_backend()'i cfg'nin GÜNCEL haliyle yeniden tetikler).
+## Fizik Motoru değiştiyse otomatik _build_backend()+reset_sim() yapılır.
+## Kütle/sekme/hava/sertlik gibi alanlar bir sonraki Sıfırla/R basışında
+## işler (reset_sim() spec'leri cfg'den tazeler). MuJoCo'nun KENDİ fiziği
+## yine mujoco/scene.xml'den okunur (bkz. sim2_config.gd başı).
 func _on_cfg_changed() -> void:
 	if cfg.backend != _last_backend:
 		_last_backend = cfg.backend
@@ -163,12 +158,7 @@ func _build_backend() -> void:
 
 	for side in ["left", "right"]:
 		var spec := PhysicsBackend.BodySpec.new(side)
-		spec.mass = cfg.mass
-		spec.radius = cfg.radius
-		spec.restitution = cfg.restitution
-		spec.drag_coefficient = cfg.drag_cd
-		spec.air_density = cfg.hava_yogunlugu
-		spec.stiffness = cfg.sertlik
+		_fill_spec(spec)
 		spec.position = Vector3(-HALF_X if side == "left" else HALF_X, DROP_HEIGHT, 0.0)
 		# Senaryo planinin can alici noktasi: sagda carpisma KAPALI,
 		# yercekimi ve hava surtunmesi ACIK.
@@ -179,6 +169,18 @@ func _build_backend() -> void:
 	# Godot Melez: top SERBEST (Godot fizigi isler).
 	for side in balls:
 		(balls[side] as Ball).set_puppet(not backend.engine_driven())
+
+
+## Top/Hava/Temas ayarlari: TEK KAYNAK Sim2Config. _build_backend() ve her
+## reset_sim() bunu cagirir; backend reset'te spec'ten yeniden kurar (Godot
+## Melez'de RigidBody'nin Mass/Damp alanlari dahil).
+func _fill_spec(spec: PhysicsBackend.BodySpec) -> void:
+	spec.mass = cfg.mass
+	spec.radius = cfg.radius
+	spec.restitution = cfg.restitution
+	spec.drag_coefficient = cfg.drag_cd
+	spec.air_density = cfg.hava_yogunlugu
+	spec.stiffness = cfg.sertlik
 
 
 ## Toplar artık scenes/main.tscn içinde gerçek node (scenes/ball.tscn
@@ -201,6 +203,11 @@ func _exit_tree() -> void:
 # ------------------------------------------------------------------- akis
 
 func reset_sim() -> void:
+	# cfg Inspector/Remote'tan degismis olabilir: spec'leri tazele, sonra
+	# backend kendini (ve Godot Melez'de RigidBody alanlarini) bunlardan kurar.
+	for id in backend.body_ids():
+		_fill_spec(backend.get_spec(id))
+	_build_balls()
 	backend.reset()
 	phase = Phase.READY
 	running = false

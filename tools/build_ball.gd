@@ -64,6 +64,8 @@ func _own(n: Node, owner_node: Node) -> void:
 func _build_ball_scene() -> int:
 	var root := RigidBody3D.new()
 	root.name = "Top"
+	# Scene panelinde ipucu: fizik ayarının yeri (bkz. scripts/ball.gd başı)
+	root.editor_description = "Fizik ayarları (kütle, sekme, hava, temas) burada DEĞİL: config/sim2_config.tres. Bu topun Mass/Damp/Physics Material alanlarını değiştirmeyin."
 	root.set_script(load(BALL_SCRIPT))
 	root.set("radius", RADIUS)
 	root.mass = MASS

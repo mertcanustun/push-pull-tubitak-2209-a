@@ -10,11 +10,23 @@ class_name Ball
 ##   KUKLA (MuJoCo / Yedek Çözücü): freeze = true, FREEZE_MODE_KINEMATIC.
 ##       Godot fiziği çalışmaz; main.gd konumu her karede backend'den yazar.
 ##   SERBEST (Godot Melez, Adım D): dondurulmaz, Godot fiziği işler.
+##
+## FİZİK AYARLARI BURADA DEĞİL: config/sim2_config.tres (tek doğruluk kaynağı).
+##   - KUKLA modlarda (MuJoCo / Yedek Çözücü) bu RigidBody'nin Mass, Damp,
+##     Physics Material, Gravity Scale vb. alanları HİÇ KULLANILMAZ.
+##   - Godot Melez'de bu alanlar her Sıfırla'da Sim2Config'ten yeniden yazılır
+##     (godot_backend.gd _apply_body_fields). Buraya elle girilen bir kütle
+##     ikinci bir değer oluşturmaz, ilk sıfırlamada cfg değerine döner.
+
+# Kısa tutuldu: varsayılan Inspector genişliğinde ~26 karakter görünüyor.
+@export_category("Fizik → sim2_config.tres")
 
 ## Yarıçap (m). main.gd bunu cfg.radius ile eşitler — küre, çarpışma şekli
 ## ve toz yayılım yarıçapı birlikte güncellenir.
 @export_range(0.01, 1.0, 0.001, "suffix:m") var radius: float = 0.119:
 	set(v):
+		if v == radius:
+			return   # her Sıfırla'da aynı değer yazılır; mesh'i boşuna yeniden üretme
 		radius = v
 		if is_node_ready():
 			_apply_radius()

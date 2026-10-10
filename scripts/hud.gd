@@ -83,6 +83,7 @@ var _kontrol_panel: PanelContainer
 var _ayar_kaydir: ScrollContainer
 var _ayar_icerik: VBoxContainer
 var _ayar_btn: Button
+var _dugme_satiri: HBoxContainer   # Baslat / Sifirla / Ayarlar
 var _ok_izgara: GridContainer
 var _hiz_deger: Label
 var _olcek_deger: Label
@@ -142,6 +143,11 @@ func _dpi() -> float:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--arayuz-dpi="):
 			return a.trim_prefix("--arayuz-dpi=").to_float()
+	# macOS fiziksel DPI'yi verir (Retina ~257); sistem ve tarayici ise 2.0x
+	# kullanir. Web'deki gibi (96 x devicePixelRatio) olcekten hesapla, yoksa
+	# arayuz Mac'te web surumunden %34 buyuk cikar.
+	if OS.has_feature("macos"):
+		return 96.0 * DisplayServer.screen_get_scale()
 	var d := float(DisplayServer.screen_get_dpi())
 	return d if d > 0.0 else 96.0
 
@@ -201,6 +207,15 @@ func _tema() -> Theme:
 	odak.border_color = Color(ACCENT, 0.9)
 	odak.set_border_width_all(2)
 	t.set_stylebox("focus", "Button", odak)
+	# Dar ekranda alt dugme satiri (Baslat/Sifirla/Ayarlar) 360 dp'ye sigsin:
+	# ayni gorunum ve AYNI yazi boyutu, yalnizca daha az yan bosluk.
+	t.set_type_variation("DarDugme", "Button")
+	for durum in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+		var sb: StyleBoxFlat = t.get_stylebox(durum, "Button").duplicate()
+		sb.content_margin_left = 10.0
+		sb.content_margin_right = 10.0
+		t.set_stylebox(durum, "DarDugme", sb)
+	t.set_constant("h_separation", "DarDugme", 6)
 	t.set_color("font_color", "Button", TEXT)
 	t.set_color("font_hover_color", "Button", Color.WHITE)
 	t.set_color("font_pressed_color", "Button", Color.WHITE)
@@ -502,6 +517,7 @@ func _build_controls() -> void:
 	var row := HBoxContainer.new()
 	row.add_theme_constant_override("separation", 8)
 	v.add_child(row)
+	_dugme_satiri = row
 	_start_btn = _dugme("Başlat", func(): start_pressed.emit())
 	row.add_child(_start_btn)
 	row.add_child(_dugme("Sıfırla", func(): reset_pressed.emit()))
@@ -635,7 +651,13 @@ func _yerlestir() -> void:
 	var kontrol_w := w - 2.0 * KENAR if dikey else clampf(sutun_w, 320.0, KONTROL_GEN)
 	_kontrol_panel.custom_minimum_size.x = kontrol_w
 	_ok_izgara.columns = 2 if kontrol_w >= 400.0 else 1
-	var geri_yan_w := w - 2.0 * KENAR - kontrol_w - BOSLUK
+	for b in _dugme_satiri.get_children():
+		b.theme_type_variation = &"" if genis else &"DarDugme"
+	# Panel, icerigi (dugme satiri) kontrol_w'den genisse ona uyar; geri
+	# bildirim genisligini o gercek genislikten hesapla, yoksa sag kenardan
+	# tasar. Yan yana iken arada bosluk dugumu var: iki BOSLUK ayirma.
+	var kontrol_gercek := maxf(kontrol_w, _kontrol_panel.get_combined_minimum_size().x)
+	var geri_yan_w := w - 2.0 * KENAR - kontrol_gercek - 2.0 * BOSLUK
 	var geri_ustte := geri_yan_w < 320.0
 	_alt.vertical = geri_ustte
 	_alt_bosluk.visible = not geri_ustte

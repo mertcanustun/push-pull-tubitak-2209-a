@@ -97,6 +97,9 @@ func _ready() -> void:
 	# Burada sadece sahneden kameraya referans aliyor ve dinamik surukleme
 	# okunu kuruyoruz.
 	camera = $Camera3D
+	_fov_16_9 = camera.fov
+	get_viewport().size_changed.connect(_kamerayi_uydur)
+	_kamerayi_uydur()
 	_bcam = BGosterimKamera.new()
 	_bcam.name = "BGosterimKamera"
 	add_child(_bcam)
@@ -126,6 +129,22 @@ func _on_cfg_changed() -> void:
 
 
 # ------------------------------------------------------------------ kurulum
+
+## Sahne 16:9 icin kadrajlandi (fov dikey aci, KEEP_HEIGHT). Daha dar
+## ekranda (dikey telefon, 4:3'ten dar tablet) yanlar kesilip toplar
+## kadrajdan cikiyordu: yatayda 16:9 goruntunun en az KAMERA_MIN_YATAY
+## kadari gorunsun diye dikey aciyi buyutuyoruz. Genis ekranda degismez.
+const KAMERA_MIN_YATAY := 0.70
+var _fov_16_9 := 54.0
+
+func _kamerayi_uydur() -> void:
+	var s := get_viewport().get_visible_rect().size
+	if s.x <= 0.0 or s.y <= 0.0:
+		return
+	var t0 := tan(deg_to_rad(_fov_16_9) * 0.5)
+	var t := maxf(t0, KAMERA_MIN_YATAY * t0 * (16.0 / 9.0) / (s.x / s.y))
+	camera.fov = rad_to_deg(2.0 * atan(t))
+
 
 func _build_hud() -> void:
 	hud = Hud.new()

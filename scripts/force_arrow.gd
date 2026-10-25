@@ -11,7 +11,7 @@ const HEAD_LENGTH := 0.16
 const MIN_LENGTH := 0.10
 
 @export_group("Ok")
-## Okun yanındaki kısa ad (G, Fs, N, F, Fnet …). Değer kodla eklenir.
+## Okun yanındaki kısa ad (Fg, Fs, N, F, Fnet …). Değer kodla eklenir.
 @export var label_text := ""
 var show_label := true
 ## Etiketler birbirinin uzerine binmesin diye her oka farkli bir kaldirma.
@@ -126,7 +126,11 @@ func set_force(force: Vector3, k: float, logarithmic: bool = true) -> void:
 	if show_label:
 		_label.visible = true
 		var num := "%.1f" % magnitude if magnitude < 10.0 else "%.0f" % magnitude
-		_label.text = "%s %s N" % [label_text, num]
+		var yazi := "%s %s N" % [label_text, num]
+		# Label3D her metin atamasında glif ağını yeniden kurar; bu her fizik
+		# adımında 12 ok için oluyordu. Yalnızca değişince yaz.
+		if _label.text != yazi:
+			_label.text = yazi
 		# Etiket dunya eksenine gore hafif saga kaysin, ok donse de okunsun.
 		_label.position = Vector3(0.0, length + 0.14 + label_lift, 0.0)
 	else:

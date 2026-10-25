@@ -31,6 +31,7 @@ extends Resource
 enum Backend { MUJOCO, YEDEK_COZUCU, GODOT_MELEZ }
 enum HavaModeli { GERCEKCI_KARE, GODOT_SONUM_DOGRUSAL, KAPALI }
 enum BGosterim { KAMERA_TAKIP, FIRLATMA_AGIR_CEKIM, IKISI, HICBIRI }
+enum EnYuksek { CANLI, SON_REKOR, GIZLI }
 
 @export_group("Fizik Motoru")
 ## Varsayılan: GODOT_MELEZ. MUJOCO bulunamazsa (derlenmemişse) otomatik
@@ -47,7 +48,7 @@ enum BGosterim { KAMERA_TAKIP, FIRLATMA_AGIR_CEKIM, IKISI, HICBIRI }
 @export_range(60, 960, 60, "suffix:Hz") var godot_tik_sayisi: int = 120
 
 @export_group("Top")
-## Kütle (kg). NBA topu 0.624 kg. Ağırlık oku (G) ve zemin kuvveti bununla
+## Kütle (kg). NBA topu 0.624 kg. Ağırlık oku (Fg) ve zemin kuvveti bununla
 ## orantılı değişir. Sıfırla'da işler.
 @export_range(0.05, 5.0, 0.001, "suffix:kg") var mass: float = 0.624
 ## Yarıçap (m). Topun görünen boyu da bundan gelir. Sıfırla'da işler.
@@ -98,6 +99,20 @@ enum BGosterim { KAMERA_TAKIP, FIRLATMA_AGIR_CEKIM, IKISI, HICBIRI }
 ## (b)'de top bu yüksekliği geçince "ekrandan çıktı" sayılır ve tepe noktası
 ## yazısı çıkar.
 @export_range(1.0, 50.0, 0.5, "suffix:m") var ekrandan_cikis_yuksekligi: float = 9.0
+
+@export_group("Koşu sonu")
+## Sağdaki topun ulaştığı yükseklik göstergesi ("En yüksek: X m"):
+##   CANLI     - eski davranış: (b) takibinde canlı sayaç + tepe noktası yazısı
+##   SON_REKOR - koşu sırasında gizli, koşu BİTİNCE "En yüksek: X m" rekoru
+##               (Sıfırla'ya kadar ekranda kalır)
+##   GIZLI     - hiç gösterilmez
+## Anında işler.
+@export var en_yuksek_gosterimi: EnYuksek = EnYuksek.SON_REKOR
+## Seçimden sonra koşunun "bitti" sayılması için geçen süre (gerçek saniye,
+## duraklatma sayılmaz). (b)'de ayrıca kamera takibinin bitmesi beklenir.
+## Koşu bitince rekor (yukarıda) ve seçeneğin son sorusu
+## (config/secenekler.json) gösterilir.
+@export_range(0.5, 30.0, 0.5, "suffix:sn") var kosu_sonu_bekleme: float = 4.0
 
 @export_group("(b) gösterimi")
 ## (b)'de top ~1200 m/s ile fırlar: 9 m'ye (ekrandan çıkış) 11 ms'de varır,

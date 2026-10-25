@@ -20,6 +20,24 @@ signal speed_changed(value: float)
 signal arrow_toggled(key: String, on: bool)
 signal tool_toggled(on: bool)
 signal choice_made(choice: String)
+## Panellerin kapladigi ekran orani (0-1): sahnenin (toplarin) gorunmesi
+## gereken bos alan bunun icinde kalir. main.gd kamerayi buna gore uydurur.
+signal sahne_payi_degisti(sol: float, sag: float, ust: float, alt: float)
+## Ust kisimdaki arayuzun (baslik, ustteki geri bildirim) bittigi y (dp).
+signal ust_serbest_degisti(y: float)
+## Koşu sonu soru penceresi kapandı. kaydet: öğrenci "Kaydet"e bastı.
+signal soru_kapandi(cevap: String, kaydet: bool)
+## Ayarlar → Referanssız mod değişti (main.gd sahneyi sıfırlar).
+signal referanssiz_degisti(on: bool)
+
+## KATMANLAR (CanvasLayer.layer) — projedeki tüm katmanlar:
+##     1  Hud (bu düğüm): başlık, paneller, kontroller, seçim, geri bildirim
+##     5  BGosterimKamera: (b) yükseklik yazısı / "En yüksek" rekoru
+##    80  PerformansDenetimi: FPS göstergesi (fareyi yutmaz)
+##    90  Koşu sonu soru penceresi (modal)
+##   100  Ayarlar penceresi (modal) — HER ZAMAN EN ÜSTTE
+const SORU_KATMANI := 90
+const AYAR_KATMANI := 100
 
 const BG := Color(0.07, 0.08, 0.11, 0.88)
 const ACCENT := Color(1.0, 0.65, 0.2)
@@ -31,29 +49,29 @@ const KENAR := 16.0          # ekran kenar boslugu
 const BOSLUK := 12.0         # paneller arasi
 const DOKUN := 48.0          # dugme yuksekligi (Material 48 dp)
 const SATIR := 44.0          # onay kutusu / kaydirici satiri (Apple 44 pt)
-const YAN_GEN := 340.0       # yan panel genisligi (genis yerlesim)
-const KONTROL_GEN := 440.0   # kontrol paneli: 2 sutun onay kutusu sigar
+const YAN_GEN := 320.0       # yan panel + kontrol paneli genisligi (genis yerlesim)
+const YAN_GEN_SIKISIK := 244.0
+const KONTROL_GEN := 440.0   # genis ekranda kontrol paneli (2 sutun onay kutusu)
 const SECIM_GEN := 680.0     # secim paneli azami genislik
 const GERI_GEN := 820.0      # geri bildirim azami genislik
-const TOP_SUTUNU := 0.41     # top merkezi ortadan 0.373h; +yaricap ve pay
 
 ## Ekranin kisa kenari dp cinsinden bu araliga sikistirilir: en dar telefon
 ## 360 dp; buyuk ekranda (projektor, 4K) arayuz 900 dp'den kucuk kalmaz.
 const KISA_KENAR_MIN := 360.0
 const KISA_KENAR_MAX := 900.0
 
-const AYAR_DOSYASI := "user://arayuz.cfg"
-const OLCEK_ADIMLARI := [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.6]
+const AYAR_GEN := 560.0      # ayarlar penceresi azami genislik
+const SORU_GEN := 600.0      # soru penceresi azami genislik
 
 enum Mod { GENIS, SIKISIK, DIKEY }
 
 const ARROW_DEFS := [
-	["gravity", "Yerçekimi  G", Color(0.94, 0.35, 0.35), true],
+	["gravity", "Yerçekimi  Fg", Color(0.94, 0.35, 0.35), true],
 	["drag", "Hava sürtünmesi  Fs", Color(0.42, 0.72, 1.00), true],
 	["contact", "Zemin tepkisi  N", Color(0.40, 0.90, 0.55), true],
 	["external", "Uygulanan kuvvet  F", Color(0.85, 0.55, 1.00), true],
 	["net", "Net kuvvet  Fnet", Color(1.00, 0.85, 0.25), true],
-	["net_minus_g", "Fnet − G", Color(1.00, 0.55, 0.15), false],
+	["net_minus_g", "Fnet − Fg", Color(1.00, 0.55, 0.15), false],
 ]
 
 const SVG_ACIK := '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><rect x="2" y="2" width="20" height="20" rx="5" fill="#ffa633"/><path d="M6.5 12.5l3.5 3.5 7.5-8" fill="none" stroke="#14161c" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
@@ -75,6 +93,12 @@ var _backend_label: Label
 var _kok: Control
 var _ust: VBoxContainer          # baslik + yan paneller
 var _baslik: Label
+var _baslik_kutu: VBoxContainer
+var _paneller: Array = []        # ic boslugu moda gore degisen paneller
+var _satir_dugmeleri: Array = [] # Baslat / Sifirla / Ayarlar
+var _secim_dugmeleri: Array = []
+var _secim_baslik: Label
+var _secim_ipucu: Label
 var _yan_satir: BoxContainer
 var _yan: Array = []             # [{panel, baslik, aciklama, okuma}] sol, sag
 var _alt: BoxContainer           # kontrol paneli + geri bildirim
@@ -86,27 +110,41 @@ var _ayar_btn: Button
 var _ok_izgara: GridContainer
 var _hiz_deger: Label
 var _olcek_deger: Label
+var _yazi_deger: Label
+var _tema_ref: Theme
+# ayarlar penceresi (kendi CanvasLayer'i, AYAR_KATMANI)
+var _ayar_katman: CanvasLayer
+var _ayar_panel: PanelContainer
+var _ayar_baslik: Control
+var _referans_cb: CheckBox
+var _gelistirici_izgara: GridContainer
+# koşu sonu soru penceresi (kendi CanvasLayer'i, SORU_KATMANI)
+var _soru_katman: CanvasLayer
+var _soru_panel: PanelContainer
+var _soru_secenek: Label
+var _soru_metin: Label
+var _soru_giris: TextEdit
+var _soru_kaydet: Button
+var _soru_gec: Button
+var _soru_icerik: VBoxContainer
 var _secim_kaydir: ScrollContainer
 var _secim_icerik: VBoxContainer
 var _geri_kaydir: ScrollContainer
 
 var _mod := Mod.GENIS
-var _kullanici_olcek := 1.0
-var _ayar_acik := true
-var _ayar_kullanici := false          # kullanici Ayarlar'a dokunduysa otomatik karar verme
 var _aciklama_kullanici := [false, false]
-var _ayar_icerik_h := 0.0
+var _geri_ustte := false
 var _yerlesim_sayac := 0
 var _ikon := {}
 
 
 func _ready() -> void:
-	_ayar_oku()
 	_ikonlari_hazirla()
+	_tema_ref = _tema()
 	_kok = Control.new()
 	_kok.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_kok.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_kok.theme = _tema()
+	_kok.theme = _tema_ref
 	add_child(_kok)
 
 	_build_title()
@@ -114,9 +152,18 @@ func _ready() -> void:
 	_build_controls()
 	_build_choice_panel()
 	_build_feedback()
+	_build_settings()
+	_build_question()
 
 	get_tree().root.size_changed.connect(_ekran_degisti)
+	Ayarlar.degisti.connect(_ayarlar_degisti)
 	_ekran_degisti()
+
+
+func _unhandled_key_input(event: InputEvent) -> void:
+	if _ayar_katman.visible and event.is_action_pressed("ui_cancel"):
+		ayarlari_ac(false)
+		get_viewport().set_input_as_handled()
 
 
 # ------------------------------------------------------------- olcek / tema
@@ -128,7 +175,7 @@ func _olcek_uygula() -> void:
 		return
 	var kisa := minf(px.x, px.y)
 	# 1 dp'ye dusen fiziksel piksel
-	var px_dp := maxf(_dpi() / _dpi_ref(), kisa / KISA_KENAR_MAX) * _kullanici_olcek
+	var px_dp := maxf(_dpi() / _dpi_ref(), kisa / KISA_KENAR_MAX) * Ayarlar.arayuz_olcek
 	px_dp = maxf(minf(px_dp, kisa / KISA_KENAR_MIN), 0.25)
 	# canvas_items + expand: Godot zaten taban boyuta gore olcekliyor
 	var taban := Vector2(win.content_scale_size)
@@ -183,7 +230,6 @@ func _kutu(bg: Color, radius: int = 10, h: float = 16.0, v: float = 10.0) -> Sty
 
 func _tema() -> Theme:
 	var t := Theme.new()
-	t.default_font_size = 17
 
 	t.set_color("font_color", "Label", TEXT)
 
@@ -207,7 +253,6 @@ func _tema() -> Theme:
 	t.set_color("font_focus_color", "Button", TEXT)
 	t.set_color("font_hover_pressed_color", "Button", Color.WHITE)
 	t.set_color("icon_normal_color", "Button", TEXT)
-	t.set_font_size("font_size", "Button", 18)
 	t.set_constant("h_separation", "Button", 10)
 
 	# Onay kutulari: 24 dp isaret, 44 dp satir, ustune gelince hafif zemin
@@ -223,7 +268,6 @@ func _tema() -> Theme:
 	t.set_icon("checked_disabled", "CheckBox", _ikon["acik"])
 	t.set_icon("unchecked_disabled", "CheckBox", _ikon["kapali"])
 	t.set_constant("h_separation", "CheckBox", 12)
-	t.set_font_size("font_size", "CheckBox", 16)
 	t.set_color("font_color", "CheckBox", TEXT)
 	t.set_color("font_pressed_color", "CheckBox", TEXT)
 	t.set_color("font_hover_color", "CheckBox", Color.WHITE)
@@ -254,11 +298,63 @@ func _tema() -> Theme:
 	t.set_stylebox("separator", "HSeparator", cizgi)
 	t.set_constant("separation", "HSeparator", 14)
 
-	t.set_font_size("normal_font_size", "RichTextLabel", 17)
-	t.set_font_size("bold_font_size", "RichTextLabel", 17)
 	t.set_constant("line_separation", "RichTextLabel", 3)
 	t.set_color("default_color", "RichTextLabel", TEXT)
+
+	# Soru penceresindeki cevap kutusu
+	var giris := _kutu(Color(0.05, 0.06, 0.08, 0.95), 8, 12, 10)
+	giris.border_color = Color(1, 1, 1, 0.18)
+	giris.set_border_width_all(1)
+	t.set_stylebox("normal", "TextEdit", giris)
+	var giris_odak := giris.duplicate()
+	giris_odak.border_color = ACCENT
+	t.set_stylebox("focus", "TextEdit", giris_odak)
+	t.set_color("font_color", "TextEdit", TEXT)
+	t.set_color("font_placeholder_color", "TextEdit", Color(MUTED, 0.7))
+	_tema_yazilari(t)
 	return t
+
+
+## YAZI ÖLÇEĞİ — TEK YER: temadaki taban yazı boyutları ve tek tek
+## kontrollere _boyut() ile verilen boyutlar Ayarlar.fs()'den geçer.
+## Ayarlar → Yazı boyutu değişince _ayarlar_degisti() ikisini de tazeler.
+const TEMA_YAZI := [
+	["default", "", 17], ["font_size", "Button", 18], ["font_size", "CheckBox", 16],
+	["normal_font_size", "RichTextLabel", 17], ["bold_font_size", "RichTextLabel", 17],
+	["font_size", "TextEdit", 17],
+]
+
+func _tema_yazilari(t: Theme) -> void:
+	for d in TEMA_YAZI:
+		if d[0] == "default":
+			t.default_font_size = Ayarlar.fs(d[2])
+		else:
+			t.set_font_size(d[0], d[1], Ayarlar.fs(d[2]))
+
+
+## Bir kontrole yazı boyutu ver: taban (dp, %100'de) meta'da saklanır,
+## ölçek değişince _yazilari_tazele() aynı tabanla yeniden uygular.
+func _boyut(c: Control, ad: String, taban: int) -> void:
+	c.set_meta("fs_" + ad, taban)
+	c.add_theme_font_size_override(ad, Ayarlar.fs(taban))
+
+
+func _yazilari_tazele(n: Node) -> void:
+	if n is Control:
+		for m in n.get_meta_list():
+			if String(m).begins_with("fs_"):
+				n.add_theme_font_size_override(String(m).trim_prefix("fs_"), Ayarlar.fs(n.get_meta(m)))
+	for c in n.get_children():
+		_yazilari_tazele(c)
+
+
+func _ayarlar_degisti() -> void:
+	_tema_yazilari(_tema_ref)
+	_yazilari_tazele(self)   # ayarlar ve soru katmanlari da bu dugumun cocugu
+	_olcek_yazisi()
+	if _referans_cb:
+		_referans_cb.set_pressed_no_signal(Ayarlar.referanssiz())
+	_ekran_degisti()
 
 
 # ------------------------------------------------------------- yardimcilar
@@ -269,13 +365,14 @@ func _panel(bg: Color = BG) -> PanelContainer:
 	sb.border_color = Color(1, 1, 1, 0.09)
 	sb.set_border_width_all(1)
 	p.add_theme_stylebox_override("panel", sb)
+	_paneller.append(sb)
 	return p
 
 
 func _label(text: String, size: int = 17, color: Color = TEXT) -> Label:
 	var l := Label.new()
 	l.text = text
-	l.add_theme_font_size_override("font_size", size)
+	_boyut(l, "font_size", size)
 	l.add_theme_color_override("font_color", color)
 	return l
 
@@ -317,7 +414,10 @@ func _build_title() -> void:
 
 	var box := _gecirgen(VBoxContainer.new())
 	box.add_theme_constant_override("separation", 2)
+	box.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	box.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	_ust.add_child(box)
+	_baslik_kutu = box
 
 	_baslik = _sarmali(_label("ETKİ – TEPKİ:  Basketbol topu yere çarptığında", 26, ACCENT))
 	_baslik.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -342,7 +442,7 @@ func _side_panel(i: int, title: String, subtitle: String, color: Color) -> Dicti
 	t.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	t.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	t.custom_minimum_size = Vector2(0, SATIR)
-	t.add_theme_font_size_override("font_size", 19)
+	_boyut(t, "font_size", 19)
 	for k in ["font_color", "font_hover_color", "font_pressed_color", "font_focus_color", "font_hover_pressed_color"]:
 		t.add_theme_color_override(k, color)
 	var ince := _kutu(Color(0, 0, 0, 0), 8, 4, 4)
@@ -419,7 +519,68 @@ func _build_controls() -> void:
 	v.add_theme_constant_override("separation", 10)
 	_kontrol_panel.add_child(v)
 
-	# --- ayarlar (dugme satirinin USTUNDE acilir, panel yukari buyur)
+	# --- her zaman gorunen dugme satiri
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	v.add_child(row)
+	_start_btn = _dugme("Başlat", func(): start_pressed.emit())
+	row.add_child(_start_btn)
+	var sifirla := _dugme("Sıfırla", func(): reset_pressed.emit())
+	row.add_child(sifirla)
+	_ayar_btn = _dugme("Ayarlar", func(): ayarlari_ac(true))
+	_ayar_btn.tooltip_text = "Hız, kuvvet okları, ok aracı, arayüz ve yazı boyutu"
+	row.add_child(_ayar_btn)
+	_satir_dugmeleri = [_start_btn, sifirla, _ayar_btn]
+
+
+## Tam ekran, alttakileri karartan ve fareyi YUTAN modal katman. Kendi
+## CanvasLayer'inda; arkadaki her sey (sahne, ok araci, secim paneli) tik almaz.
+func _modal_katman(katman: int) -> Array:
+	var k := CanvasLayer.new()
+	k.layer = katman
+	k.visible = false
+	add_child(k)
+	var kok := Control.new()
+	kok.set_anchors_preset(Control.PRESET_FULL_RECT)
+	kok.mouse_filter = Control.MOUSE_FILTER_STOP
+	kok.theme = _tema_ref
+	k.add_child(kok)
+	var karart := ColorRect.new()
+	karart.color = Color(0, 0, 0, 0.55)
+	karart.set_anchors_preset(Control.PRESET_FULL_RECT)
+	karart.mouse_filter = Control.MOUSE_FILTER_STOP
+	kok.add_child(karart)
+	var p := _panel(Color(0.09, 0.10, 0.14, 0.98))
+	kok.add_child(p)
+	return [k, karart, p]
+
+
+func _build_settings() -> void:
+	var m := _modal_katman(AYAR_KATMANI)
+	_ayar_katman = m[0]
+	_ayar_panel = m[2]
+	# karartilmis alana dokunmak pencereyi kapatir
+	(m[1] as ColorRect).gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.pressed:
+			ayarlari_ac(false))
+
+	var v := VBoxContainer.new()
+	v.add_theme_constant_override("separation", 10)
+	_ayar_panel.add_child(v)
+
+	var ust := HBoxContainer.new()
+	ust.add_theme_constant_override("separation", 8)
+	v.add_child(ust)
+	var baslik := _label("Ayarlar", 22, ACCENT)
+	baslik.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	baslik.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	ust.add_child(baslik)
+	var kapat := _dugme("Kapat", func(): ayarlari_ac(false))
+	kapat.size_flags_horizontal = Control.SIZE_SHRINK_END
+	kapat.custom_minimum_size = Vector2(DOKUN * 2.0, DOKUN)
+	ust.add_child(kapat)
+	_ayar_baslik = ust
+
 	_ayar_kaydir = _kaydirma()
 	v.add_child(_ayar_kaydir)
 	_ayar_icerik = VBoxContainer.new()
@@ -456,11 +617,7 @@ func _build_controls() -> void:
 	_ok_izgara.add_theme_constant_override("v_separation", 0)
 	_ayar_icerik.add_child(_ok_izgara)
 	for def in ARROW_DEFS:
-		var cb := CheckBox.new()
-		cb.text = def[1]
-		cb.button_pressed = def[3]
-		cb.custom_minimum_size = Vector2(0, SATIR)
-		cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		var cb := _onay(def[1], def[3])
 		for k in ["font_color", "font_pressed_color", "font_hover_color", "font_hover_pressed_color", "font_focus_color"]:
 			cb.add_theme_color_override(k, def[2])
 		var key: String = def[0]
@@ -468,57 +625,85 @@ func _build_controls() -> void:
 		_ok_izgara.add_child(cb)
 
 	_ayar_icerik.add_child(HSeparator.new())
-	var tool_cb := CheckBox.new()
-	tool_cb.text = "Ok aracı (sürükle-bırak)"
-	tool_cb.custom_minimum_size = Vector2(0, SATIR)
+	var tool_cb := _onay("Ok aracı (sürükle-bırak)", false)
 	tool_cb.toggled.connect(func(on: bool): tool_toggled.emit(on))
 	_ayar_icerik.add_child(tool_cb)
 
+	# Referanssiz mod: ogrenci surumunde (student_build) zorla acik, gizli
+	_referans_cb = _onay("Referanssız mod (doğru simülasyonu gösterme)", Ayarlar.referanssiz())
+	_referans_cb.tooltip_text = "Soldaki gerçek fizik simülasyonu gizlenir; öğrenci yalnızca seçeneklerden birini seçer. Değişince simülasyon sıfırlanır."
+	_referans_cb.toggled.connect(func(on: bool):
+		Ayarlar.referanssiz_ayarla(on)
+		referanssiz_degisti.emit(on))
+	_referans_cb.visible = not Ayarlar.referanssiz_zorunlu()
+	_ayar_icerik.add_child(_referans_cb)
+
 	_ayar_icerik.add_child(HSeparator.new())
-	var olcek_satir := HBoxContainer.new()
-	olcek_satir.add_theme_constant_override("separation", 8)
-	var olcek_lbl := _label("Arayüz boyutu", 15, MUTED)
-	olcek_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	olcek_satir.add_child(olcek_lbl)
-	var kucult := _dugme("A−", func(): _olcek_degistir(-1))
-	kucult.size_flags_horizontal = Control.SIZE_FILL
-	kucult.custom_minimum_size = Vector2(DOKUN + 8, DOKUN)
-	kucult.tooltip_text = "Arayüzü küçült"
-	olcek_satir.add_child(kucult)
-	_olcek_deger = _label("", 16, TEXT)
-	_olcek_deger.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_olcek_deger.custom_minimum_size = Vector2(56, 0)
-	_olcek_deger.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	olcek_satir.add_child(_olcek_deger)
-	var buyut := _dugme("A+", func(): _olcek_degistir(1))
-	buyut.size_flags_horizontal = Control.SIZE_FILL
-	buyut.custom_minimum_size = Vector2(DOKUN + 8, DOKUN)
-	buyut.tooltip_text = "Arayüzü büyüt"
-	olcek_satir.add_child(buyut)
-	_ayar_icerik.add_child(olcek_satir)
+	_olcek_deger = _adim_satiri("Arayüz boyutu", "Arayüzü", Ayarlar.arayuz_olcek_adim)
+	_yazi_deger = _adim_satiri("Yazı boyutu", "Yazıları", Ayarlar.yazi_olcek_adim)
 	_olcek_yazisi()
 
-	# --- her zaman gorunen dugme satiri
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
-	v.add_child(row)
-	_start_btn = _dugme("Başlat", func(): start_pressed.emit())
-	row.add_child(_start_btn)
-	row.add_child(_dugme("Sıfırla", func(): reset_pressed.emit()))
-	_ayar_btn = _dugme("Ayarlar", func():
-		_ayar_kullanici = true
-		_ayar_ac(not _ayar_acik)
-		_yerlestir())
-	_ayar_btn.icon_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_ayar_btn.tooltip_text = "Hız, kuvvet okları, ok aracı, arayüz boyutu"
-	row.add_child(_ayar_btn)
-	_ayar_ac(true)
+	_gelistirici_izgara = GridContainer.new()
+	_gelistirici_izgara.columns = 2
+	_gelistirici_izgara.add_theme_constant_override("h_separation", 8)
+	_gelistirici_izgara.add_theme_constant_override("v_separation", 0)
 
 
-func _ayar_ac(acik: bool) -> void:
-	_ayar_acik = acik
-	_ayar_kaydir.visible = acik
-	_ayar_btn.icon = _ikon["asagi"] if acik else _ikon["yukari"]
+func _onay(text: String, acik: bool) -> CheckBox:
+	var cb := CheckBox.new()
+	cb.text = text
+	cb.button_pressed = acik
+	cb.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	cb.custom_minimum_size = Vector2(0, SATIR)
+	cb.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	return cb
+
+
+## "Ad   A−  %100  A+" satiri; deger etiketini dondurur.
+func _adim_satiri(ad: String, ipucu: String, adim: Callable) -> Label:
+	var satir := HBoxContainer.new()
+	satir.add_theme_constant_override("separation", 8)
+	var lbl := _label(ad, 15, MUTED)
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	satir.add_child(lbl)
+	var kucult := _dugme("A−", func(): adim.call(-1))
+	kucult.size_flags_horizontal = Control.SIZE_FILL
+	kucult.custom_minimum_size = Vector2(DOKUN + 8, DOKUN)
+	kucult.tooltip_text = ipucu + " küçült"
+	satir.add_child(kucult)
+	var deger := _label("", 16, TEXT)
+	deger.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	deger.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	deger.custom_minimum_size = Vector2(56, 0)
+	satir.add_child(deger)
+	var buyut := _dugme("A+", func(): adim.call(1))
+	buyut.size_flags_horizontal = Control.SIZE_FILL
+	buyut.custom_minimum_size = Vector2(DOKUN + 8, DOKUN)
+	buyut.tooltip_text = ipucu + " büyüt"
+	satir.add_child(buyut)
+	_ayar_icerik.add_child(satir)
+	return deger
+
+
+## Ayarlar → "Geliştirici" bolumu: PerformansDenetimi'nin anahtarlari.
+func gelistirici_kur(perf: PerformansDenetimi) -> void:
+	_ayar_icerik.add_child(HSeparator.new())
+	_ayar_icerik.add_child(_label("Geliştirici — performans testi (kaydedilmez)", 15, MUTED))
+	_ayar_icerik.add_child(_gelistirici_izgara)
+	for d in PerformansDenetimi.ANAHTARLAR:
+		var anahtar: String = d[0]
+		var cb := _onay(d[1], bool(perf.get(anahtar)))
+		_boyut(cb, "font_size", 14)
+		cb.toggled.connect(func(on: bool): perf.set(anahtar, on))
+		_gelistirici_izgara.add_child(cb)
+	_yerlestir()
+
+
+func ayarlari_ac(acik: bool) -> void:
+	_ayar_katman.visible = acik
+	if acik:
+		_yerlestir()
 
 
 func _build_choice_panel() -> void:
@@ -536,36 +721,32 @@ func _build_choice_panel() -> void:
 	_secim_icerik.add_theme_constant_override("separation", 12)
 	_secim_kaydir.add_child(_secim_icerik)
 
-	var t := _sarmali(_label("Top tam zemine değdi. Zemin topa hangi kuvveti uygular?", 22, ACCENT))
-	_secim_icerik.add_child(t)
+	_secim_baslik = _sarmali(_label(Ayarlar.metin("secim_basligi"), 22, ACCENT))
+	_secim_icerik.add_child(_secim_baslik)
 
-	var hint := _sarmali(_label("Sol taraf gerçek fiziği gösteriyor. Sağdaki top için sen karar ver.", 16, MUTED))
-	_secim_icerik.add_child(hint)
+	_secim_ipucu = _sarmali(_label(Ayarlar.metin("secim_ipucu"), 16, MUTED))
+	_secim_icerik.add_child(_secim_ipucu)
 
-	var options := [
-		["a", "a)   Yukarı yönlü F kadar kuvvet", "Topun momentumunu tersine çevirecek kadar tepki kuvveti."],
-		["b", "b)   Yukarı yönlü 100·F kadar kuvvet", "Zemin çok daha büyük bir kuvvetle iter."],
-		["c", "c)   Hem yukarı hem aşağı F  →  top durur", "Etki ve tepki topun üzerinde birbirini götürür."],
-	]
-	for opt in options:
+	# Secenekler config/secenekler.json'dan (Ayarlar.secenek_listesi); kac
+	# tane olursa olsun alt alta, kaydirilabilir alanda.
+	for opt in Ayarlar.secenek_listesi():
 		var b := Button.new()
-		b.custom_minimum_size = Vector2(0, 72)
-		b.text = "%s\n%s" % [opt[1], opt[2]]
-		b.add_theme_font_size_override("font_size", 17)
+		b.custom_minimum_size = Vector2(0, DOKUN)
+		b.text = "%s   %s" % [opt.get("harf", ""), opt.get("metin", "")]
+		_boyut(b, "font_size", 17)
 		b.alignment = HORIZONTAL_ALIGNMENT_LEFT
 		b.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		b.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		var key: String = opt[0]
+		var key: String = opt.get("id", "")
 		b.pressed.connect(func(): choice_made.emit(key))
 		_secim_icerik.add_child(b)
+		_secim_dugmeleri.append(b)
 
 
 func _build_feedback() -> void:
 	var p := _panel(Color(0.09, 0.10, 0.14, 0.93))
-	p.size_flags_vertical = Control.SIZE_SHRINK_END
-	p.size_flags_horizontal = Control.SIZE_SHRINK_END
 	p.visible = false
-	_alt.add_child(p)
+	_kok.add_child(p)
 
 	_geri_kaydir = _kaydirma()
 	p.add_child(_geri_kaydir)
@@ -579,6 +760,47 @@ func _build_feedback() -> void:
 	_feedback_panel = p
 
 
+func _build_question() -> void:
+	var m := _modal_katman(SORU_KATMANI)
+	_soru_katman = m[0]
+	_soru_panel = m[2]
+
+	var kaydir := _kaydirma()
+	_soru_panel.add_child(kaydir)
+	_soru_icerik = VBoxContainer.new()
+	_soru_icerik.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_soru_icerik.add_theme_constant_override("separation", 12)
+	kaydir.add_child(_soru_icerik)
+
+	_soru_icerik.add_child(_label(Ayarlar.metin("soru_basligi", "Soru"), 22, ACCENT))
+	_soru_secenek = _sarmali(_label("", 15, MUTED))
+	_soru_icerik.add_child(_soru_secenek)
+	_soru_metin = _sarmali(_label("", 19, TEXT))
+	_soru_icerik.add_child(_soru_metin)
+
+	_soru_giris = TextEdit.new()
+	_soru_giris.placeholder_text = "Cevabını buraya yaz…"
+	_soru_giris.wrap_mode = TextEdit.LINE_WRAPPING_BOUNDARY
+	_soru_giris.custom_minimum_size = Vector2(0, 120)
+	_soru_giris.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_soru_icerik.add_child(_soru_giris)
+
+	var satir := HBoxContainer.new()
+	satir.add_theme_constant_override("separation", 8)
+	_soru_icerik.add_child(satir)
+	_soru_gec = _dugme("Geç", func(): _soru_kapat(false))
+	satir.add_child(_soru_gec)
+	_soru_kaydet = _dugme("Kaydet", func(): _soru_kapat(true))
+	satir.add_child(_soru_kaydet)
+	_satir_dugmeleri.append_array([_soru_gec, _soru_kaydet])
+
+
+func _soru_kapat(kaydet: bool) -> void:
+	var cevap := _soru_giris.text.strip_edges() if _soru_giris.visible else ""
+	_soru_katman.visible = false
+	soru_kapandi.emit(cevap, kaydet and cevap != "")
+
+
 # ------------------------------------------------------------ duyarli yerlesim
 
 func _ekran_degisti() -> void:
@@ -586,9 +808,16 @@ func _ekran_degisti() -> void:
 	_yerlestir()
 
 
-## Ekranin dp boyutuna gore modu secer, genislikleri verir; bir kare
-## bekleyip (sarilan yazilarin yuksekligi ancak o zaman belli) kaydirma
-## alanlarinin yuksekligini sinirlar.
+func _tasi(c: Control, hedef: Container, sira: int) -> void:
+	if c.get_parent() != hedef:
+		c.get_parent().remove_child(c)
+		hedef.add_child(c)
+	hedef.move_child(c, sira)
+
+
+## Ekranin dp boyutuna gore modu secer, genislik ve yazi boyutlarini verir.
+## Sarilan yazilarin yuksekligi ancak bir kare sonra belli oldugu icin
+## yukseklik sinirlari _sinirla()'da verilir.
 func _yerlestir() -> void:
 	if not is_inside_tree():
 		return
@@ -604,25 +833,45 @@ func _yerlestir() -> void:
 	var genis := _mod == Mod.GENIS
 	var dikey := _mod == Mod.DIKEY
 
-	# yazi boyutlari: dar ekranda bir kademe kucuk (yine de >= 14 dp)
-	_baslik.add_theme_font_size_override("font_size", 26 if genis else 20)
-	_status.add_theme_font_size_override("font_size", 17 if genis else 15)
+	# yazi boyutlari ve ic bosluklar: dar ekranda bir kademe kucuk (>= 14 dp)
+	# (taban boyutlar; yazi olcegi _boyut -> Ayarlar.fs icinde uygulanir)
+	var govde := 17 if genis else 15
+	_boyut(_baslik, "font_size", 26 if genis else 20)
+	_boyut(_status, "font_size", 17 if genis else 15)
 	for y in _yan:
-		y["okuma"].add_theme_font_size_override("normal_font_size", 17 if genis else 15)
-		y["okuma"].add_theme_font_size_override("bold_font_size", 17 if genis else 15)
-		y["okuma"].custom_minimum_size.y = 4 * (24 if genis else 21)
-		y["baslik"].add_theme_font_size_override("font_size", 19 if genis else 17)
-	_feedback.add_theme_font_size_override("normal_font_size", 17 if genis else 15)
-	_feedback.add_theme_font_size_override("bold_font_size", 17 if genis else 15)
+		_boyut(y["okuma"], "normal_font_size", govde)
+		_boyut(y["okuma"], "bold_font_size", govde)
+		y["okuma"].custom_minimum_size.y = 4 * (Ayarlar.fs(govde) + 6)
+		_boyut(y["baslik"], "font_size", 19 if genis else 15)
+	_boyut(_feedback, "normal_font_size", govde)
+	_boyut(_feedback, "bold_font_size", govde)
+	var ic := 16.0 if genis else 12.0
+	for sb: StyleBoxFlat in _paneller:
+		sb.content_margin_left = ic
+		sb.content_margin_right = ic
+		sb.content_margin_top = ic - 2.0
+		sb.content_margin_bottom = ic - 2.0
+	for b: Button in _satir_dugmeleri:
+		_boyut(b, "font_size", 18 if genis else 16)
+		var sb := _kutu(Color(0, 0, 0, 0), 10, 16.0 if genis else 10.0, 10)
+		b.add_theme_constant_override("h_separation", 10 if genis else 6)
+		for k in ["normal", "hover", "pressed", "hover_pressed", "disabled", "focus"]:
+			var o: StyleBoxFlat = _kok.theme.get_stylebox(k, "Button").duplicate()
+			o.content_margin_left = sb.content_margin_left
+			o.content_margin_right = sb.content_margin_right
+			b.add_theme_stylebox_override(k, o)
+	_boyut(_secim_baslik, "font_size", 22 if genis else 18)
+	_boyut(_secim_ipucu, "font_size", 16 if genis else 14)
+	_secim_icerik.add_theme_constant_override("separation", 12 if genis else 8)
+	for b: Button in _secim_dugmeleri:
+		_boyut(b, "font_size", 17 if genis else 15)
+		# yazi sarilinca dugme kendiliginden uzar; en az dokunma hedefi kadar
+		b.custom_minimum_size.y = maxf(DOKUN, (60.0 if genis else 52.0) * minf(Ayarlar.yazi_olcek, 1.0))
 
-	# ust: baslik + iki yan panel
+	# ust: baslik (+ dikey olmayan modda iki yan panel)
 	_ust.position = Vector2(KENAR, KENAR * (0.75 if genis else 0.5))
 	_ust.size = Vector2(w - 2.0 * KENAR, 0)
-	# Toplar ekran ortasindan +-0.373*h uzakta duser (kamera 16:9, KEEP_HEIGHT;
-	# yaricap ~0.03h). Sol/sag paneller bu sutunlara tasmasin, yoksa
-	# birakilma anindaki top panelin arkasinda kalir.
-	var sutun_w := w * 0.5 - TOP_SUTUNU * h - KENAR
-	var yan_w := clampf(sutun_w, 220.0, YAN_GEN)
+	var yan_w := YAN_GEN if genis else YAN_GEN_SIKISIK
 	for i in 2:
 		var p: PanelContainer = _yan[i]["panel"]
 		p.custom_minimum_size.x = 0.0 if dikey else yan_w
@@ -631,24 +880,44 @@ func _yerlestir() -> void:
 			_aciklama_goster(i, genis)
 	_yan_satir.get_child(1).visible = not dikey
 
-	# alt: kontrol paneli + geri bildirim
-	var kontrol_w := w - 2.0 * KENAR if dikey else clampf(sutun_w, 320.0, KONTROL_GEN)
+	# alt: dikeyde [yan paneller, kontrol] ust uste; yatayda yalniz kontrol
+	# Kontrol paneli soldaki topun sutununa tasmasin (top ortadan ~0.41h
+	# uzakta); yer varsa 2 sutun onay kutusu ile daha kisa olur.
+	var kontrol_w := yan_w
+	if dikey:
+		kontrol_w = w - 2.0 * KENAR
+	elif genis and w * 0.5 - 0.41 * h - KENAR >= 400.0:
+		kontrol_w = KONTROL_GEN
 	_kontrol_panel.custom_minimum_size.x = kontrol_w
-	_ok_izgara.columns = 2 if kontrol_w >= 400.0 else 1
-	var geri_yan_w := w - 2.0 * KENAR - kontrol_w - BOSLUK
-	var geri_ustte := geri_yan_w < 320.0
-	_alt.vertical = geri_ustte
-	_alt_bosluk.visible = not geri_ustte
-	if geri_ustte:
-		_alt.move_child(_feedback_panel, 0)
-		_feedback_panel.custom_minimum_size.x = w - 2.0 * KENAR
+	if dikey:
+		_tasi(_yan_satir, _alt, 0)
 	else:
-		_alt.move_child(_feedback_panel, -1)
-		_feedback_panel.custom_minimum_size.x = minf(GERI_GEN, geri_yan_w)
+		_tasi(_yan_satir, _ust, 1)
+	_alt.vertical = dikey
+	_alt_bosluk.visible = not dikey
+	_alt.move_child(_kontrol_panel, -1 if dikey else 0)
+
+	# geri bildirim: genis ekranda sag altta (kontrolun yaninda). Dar
+	# ekranda ustte: secimden sonra toplar zeminde / alcakta, ust kisim
+	# (baslik + birakilma yuksekligi) o an en az gerekli alan.
+	var kontrol_gercek := maxf(kontrol_w, _kontrol_panel.get_combined_minimum_size().x)
+	var geri_yan_w := w - 2.0 * KENAR - kontrol_gercek - BOSLUK
+	_geri_ustte = not genis or geri_yan_w < 320.0
+	_feedback_panel.custom_minimum_size.x = w - 2.0 * KENAR if _geri_ustte else minf(GERI_GEN, geri_yan_w)
 
 	# secim paneli: ortada, ekrana sigar
 	var secim_w := minf(SECIM_GEN, w - 2.0 * KENAR)
-	_secim_icerik.custom_minimum_size.x = secim_w - 32.0
+	_secim_icerik.custom_minimum_size.x = secim_w - 2.0 * ic
+
+	# modal pencereler: ortada, ekrana sigar
+	var ayar_w := minf(AYAR_GEN, w - 2.0 * KENAR)
+	_ayar_icerik.custom_minimum_size.x = ayar_w - 2.0 * ic - 12.0   # kaydirma cubugu payi
+	_ayar_baslik.custom_minimum_size.x = _ayar_icerik.custom_minimum_size.x
+	var iki_sutun := _ayar_icerik.custom_minimum_size.x >= 400.0 * minf(Ayarlar.yazi_olcek, 1.0)
+	_ok_izgara.columns = 2 if iki_sutun else 1
+	_gelistirici_izgara.columns = 2 if iki_sutun else 1
+	_soru_icerik.custom_minimum_size.x = minf(SORU_GEN, w - 2.0 * KENAR) - 2.0 * ic - 12.0
+	_soru_giris.custom_minimum_size.y = clampf(h * 0.22, 72.0, 160.0)
 
 	_yerlesim_sayac += 1
 	var sayac := _yerlesim_sayac
@@ -656,55 +925,48 @@ func _yerlestir() -> void:
 	if sayac != _yerlesim_sayac:
 		return   # bu arada yeni bir yerlesim istendi
 	_sinirla(w, h)
+	await get_tree().process_frame
+	if sayac != _yerlesim_sayac:
+		return
+	_sinirla(w, h)   # ikinci tur: ilk turda degisen genisliklere gore yukseklikler
+	_sahne_payini_bildir(w, h, yan_w)
 
 
 ## Sarilan yazilar artik olculmus durumda: kaydirma alanlarina yukseklik ver.
 func _sinirla(w: float, h: float) -> void:
-	var ust_alt := _ust.position.y + _ust.get_combined_minimum_size().y
-	var satir_h := DOKUN + 2.0 * 14.0 + 2.0   # dugme satiri + panel ic boslugu
+	var ic := 16.0 if _mod == Mod.GENIS else 12.0
 
-	# Ayarlar: sigiyorsa (genis ekranda) kendiliginden acik kalir
-	if _ayar_acik:
-		_ayar_icerik_h = _ayar_icerik.get_combined_minimum_size().y
-	if not _ayar_kullanici:
-		var bos_h := h - KENAR - ust_alt - BOSLUK - satir_h - 10.0
-		var ac := _mod == Mod.GENIS and _ayar_icerik_h <= bos_h
-		# Sigmiyorsa: aciklamalari katlayinca sigiyor mu? (ayarlar daha cok is gorur)
-		if _mod == Mod.GENIS and not ac and not (_aciklama_kullanici[0] or _aciklama_kullanici[1]):
-			var acik_h := 0.0
-			for y in _yan:
-				if y["aciklama"].visible:
-					acik_h = maxf(acik_h, y["aciklama"].size.y + 6.0)
-			if acik_h > 0.0 and _ayar_icerik_h <= bos_h + acik_h:
-				for i in 2:
-					_aciklama_goster(i, false)
-				ac = true
-		if ac != _ayar_acik:
-			_ayar_ac(ac)
-			if ac:
-				_ayar_icerik_h = _ayar_icerik.get_combined_minimum_size().y
-	# Kullanici actiysa ust panellerin uzerine tasabilir (gecici katman)
-	var ayar_max := h - 2.0 * KENAR - satir_h - 10.0 - 40.0
-	_ayar_kaydir.custom_minimum_size.y = clampf(_ayar_icerik_h, 0.0, maxf(ayar_max, 120.0))
+	# Ayarlar penceresi (modal): icerik sigmazsa kaydirilir
+	var ayar_max := h - 2.0 * KENAR - 2.0 * ic - _ayar_baslik.get_combined_minimum_size().y - 10.0
+	_ayar_kaydir.custom_minimum_size = Vector2(
+		_ayar_icerik.custom_minimum_size.x,
+		clampf(_ayar_icerik.get_combined_minimum_size().y, 0.0, maxf(ayar_max, 80.0)))
+	_ayar_panel.reset_size()
+	_ayar_panel.position = ((Vector2(w, h) - _ayar_panel.size) * 0.5).max(Vector2.ZERO)
 
-	# Geri bildirim
-	var kontrol_h := _kontrol_panel.get_combined_minimum_size().y
-	var geri_max: float
-	if _alt.vertical:
-		geri_max = h - KENAR - kontrol_h - BOSLUK - ust_alt - BOSLUK - 28.0
-	else:
-		# yatay telefonda sag paneli gecici olarak ortebilir: aciklama o an onemli
-		geri_max = h * (0.4 if _mod == Mod.GENIS else 0.62)
-	geri_max = maxf(geri_max, 96.0)
-	_geri_kaydir.custom_minimum_size.y = minf(_feedback.get_combined_minimum_size().y, geri_max)
+	# Soru penceresi (modal)
+	var soru_kaydir := _soru_icerik.get_parent() as ScrollContainer
+	soru_kaydir.custom_minimum_size = Vector2(
+		_soru_icerik.custom_minimum_size.x,
+		minf(_soru_icerik.get_combined_minimum_size().y, maxf(h - 2.0 * KENAR - 2.0 * ic, 80.0)))
+	_soru_panel.reset_size()
+	_soru_panel.position = ((Vector2(w, h) - _soru_panel.size) * 0.5).max(Vector2.ZERO)
 
-	_alt.size = Vector2(w - 2.0 * KENAR, 0)
 	_alt.reset_size()
 	_alt.size.x = w - 2.0 * KENAR
 	_alt.position = Vector2(KENAR, h - KENAR - _alt.get_combined_minimum_size().y)
 
+	# Geri bildirim
+	var geri_max := h * (0.36 if _mod == Mod.DIKEY else 0.4)
+	_geri_kaydir.custom_minimum_size.y = minf(_feedback.get_combined_minimum_size().y, maxf(geri_max, 96.0))
+	_feedback_panel.reset_size()
+	if _geri_ustte:
+		_feedback_panel.position = Vector2(KENAR, KENAR * 0.5)
+	else:
+		_feedback_panel.position = Vector2(w - KENAR, h - KENAR) - _feedback_panel.size
+
 	# Secim paneli
-	var secim_max := h - 2.0 * KENAR - 28.0
+	var secim_max := h - 2.0 * KENAR - 2.0 * ic
 	_secim_kaydir.custom_minimum_size = Vector2(
 		_secim_icerik.custom_minimum_size.x,
 		minf(_secim_icerik.get_combined_minimum_size().y, secim_max))
@@ -712,29 +974,25 @@ func _sinirla(w: float, h: float) -> void:
 	_choice_panel.position = (Vector2(w, h) - _choice_panel.size) * 0.5
 
 
+func _sahne_payini_bildir(w: float, h: float, yan_w: float) -> void:
+	var ust := (_baslik_kutu.get_global_rect().end.y + 4.0) / h
+	var serbest := _baslik_kutu.get_global_rect().end.y
+	if _feedback_panel.visible and _geri_ustte:
+		serbest = maxf(serbest, _feedback_panel.get_global_rect().end.y)
+	ust_serbest_degisti.emit(serbest + 8.0)
+	if _mod == Mod.DIKEY:
+		var alt := (h - _yan_satir.get_global_rect().position.y + 4.0) / h
+		sahne_payi_degisti.emit(KENAR / w, KENAR / w, ust, alt)
+	else:
+		var yan := (KENAR + yan_w + BOSLUK) / w
+		sahne_payi_degisti.emit(yan, yan, ust, 0.0)
+
+
 # -------------------------------------------------------------- arayuz olcegi
 
-func _ayar_oku() -> void:
-	var c := ConfigFile.new()
-	if c.load(AYAR_DOSYASI) == OK:
-		_kullanici_olcek = clampf(float(c.get_value("arayuz", "olcek", 1.0)), 0.5, 2.0)
-
-
-func _olcek_degistir(yon: int) -> void:
-	var i := OLCEK_ADIMLARI.find(_kullanici_olcek)
-	if i < 0:
-		i = OLCEK_ADIMLARI.find(1.0)
-	i = clampi(i + yon, 0, OLCEK_ADIMLARI.size() - 1)
-	_kullanici_olcek = OLCEK_ADIMLARI[i]
-	_olcek_yazisi()
-	var c := ConfigFile.new()
-	c.set_value("arayuz", "olcek", _kullanici_olcek)
-	c.save(AYAR_DOSYASI)
-	_ekran_degisti()
-
-
 func _olcek_yazisi() -> void:
-	_olcek_deger.text = "%d%%" % roundi(_kullanici_olcek * 100.0)
+	_olcek_deger.text = "%d%%" % roundi(Ayarlar.arayuz_olcek * 100.0)
+	_yazi_deger.text = "%d%%" % roundi(Ayarlar.yazi_olcek * 100.0)
 
 
 # ----------------------------------------------------------------- disa acik
@@ -746,15 +1004,49 @@ func set_start_text(text: String) -> void:
 	_start_btn.text = text
 
 func set_readout(side: String, bbcode: String) -> void:
-	if side == "left":
-		_left_readout.text = bbcode
-	else:
-		_right_readout.text = bbcode
+	# dar panelde satir kayarsa "0.00 N" ikiye bolunmesin: deger-birim ve
+	# etiket-deger arasina bolunmez bosluk
+	bbcode = bbcode.replace(" N", "\u00a0N").replace(" m", "\u00a0m").replace("[/color] ", "[/color]\u00a0")
+	# Ayni metni yeniden atamak da BBCode'u bastan ayristirir ve yerlesimi
+	# kirletir (duran topta her karede oluyordu).
+	var r := _left_readout if side == "left" else _right_readout
+	if r.text != bbcode:
+		r.text = bbcode
 
 func show_choice(show_it: bool) -> void:
 	_choice_panel.visible = show_it
 	if show_it:
 		_yerlestir()
+
+## Ayarlar ya da soru penceresi acik mi? (main.gd klavye kisayollarini yutar)
+func modal_acik() -> bool:
+	return _ayar_katman.visible or _soru_katman.visible
+
+
+## Referanssiz mod: soldaki (dogru fizik) panel ve secim ipucu.
+func referans_goster(goster: bool) -> void:
+	_yan[0]["panel"].visible = goster
+	_secim_ipucu.text = Ayarlar.metin("secim_ipucu" if goster else "secim_ipucu_referanssiz")
+	_yerlestir()
+
+
+## Kosu sonu sorusu. metin_girisi false: soru yalnizca gosterilir (sozlu cevap).
+func soru_goster(secenek_metni: String, soru: String, metin_girisi: bool) -> void:
+	_soru_secenek.text = secenek_metni
+	_soru_metin.text = soru
+	_soru_giris.text = ""
+	_soru_giris.visible = metin_girisi
+	_soru_gec.visible = metin_girisi
+	_soru_kaydet.text = "Kaydet" if metin_girisi else "Tamam"
+	_soru_katman.visible = true
+	_yerlestir()
+	if metin_girisi:
+		_soru_giris.grab_focus.call_deferred()
+
+
+func soru_kapat() -> void:
+	_soru_katman.visible = false
+
 
 func show_feedback(bbcode: String) -> void:
 	_feedback.text = bbcode

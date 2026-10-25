@@ -166,12 +166,12 @@ func _build_ball_scene() -> int:
 	arrow_root.name = "Oklar"
 	root.add_child(arrow_root)
 	var defs := [
-		["gravity", Color(0.94, 0.35, 0.35), "G"],
+		["gravity", Color(0.94, 0.35, 0.35), "Fg"],
 		["drag", Color(0.42, 0.72, 1.00), "Fs"],
 		["contact", Color(0.40, 0.90, 0.55), "N"],
 		["external", Color(0.85, 0.55, 1.00), "F"],
 		["net", Color(1.00, 0.85, 0.25), "Fnet"],
-		["net_minus_g", Color(1.00, 0.55, 0.15), "Fnet-G"],
+		["net_minus_g", Color(1.00, 0.55, 0.15), "Fnet-Fg"],
 	]
 	for d in defs:
 		var a := ForceArrow.new(d[1], d[2])

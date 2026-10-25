@@ -55,6 +55,8 @@ var _held_vel: Dictionary = {}   # id -> Vector3 (duraklatılmışken saklanan h
 ## sekmelerde 1 mm'ye büyüyordu.
 var _mirror_sync := false
 var _saved_ticks := 60
+## Her sekmede konsola "temas bitti" satırı (Main/Performans → temas_logu).
+static var temas_logu := true
 
 
 func _init(cfg: Sim2Config, bodies: Dictionary) -> void:
@@ -288,7 +290,7 @@ func _integrate(id: String, st: PhysicsDirectBodyState3D) -> void:
 				s.contact_duration = 0.0
 				s.contact_peak = 0.0
 			s.contact_peak = maxf(s.contact_peak, fn)
-	if _in_contact[id] and not touching and id == "left":
+	if temas_logu and _in_contact[id] and not touching and id == "left":
 		print("[Godot Melez] temas bitti: %d adım, %.2f ms, tepe N %.0f" % [
 			s.contact_step_count, s.contact_duration * 1000.0, s.contact_peak])
 	_in_contact[id] = touching

@@ -60,7 +60,7 @@ panelde ad kısaltılmış görünebilir).
 ### Top
 | Inspector'da | Varsayılan | Ne yapar | Neye bak |
 |---|---|---|---|
-| Mass | 0.624 kg | Topun kütlesi (NBA topu) | Ağırlık oku (G) büyür/küçülür; zemin kuvveti de orantılı değişir. 2 kg'da temas 7.5 → 13.8 ms, tepe N 1665 → 3011 N (ölçüldü). |
+| Mass | 0.624 kg | Topun kütlesi (NBA topu) | Ağırlık oku (Fg) büyür/küçülür; zemin kuvveti de orantılı değişir. 2 kg'da temas 7.5 → 13.8 ms, tepe N 1665 → 3011 N (ölçüldü). |
 | Radius | 0.119 m | Topun boyutu | Top görünür boyut değiştirir. |
 | Restitution | 0.76 | Sekme katsayısı (0 = hiç, 1 = kayıpsız) | Sol top: 0.5'te ~0.77 m, 0.76'da ~1.5 m, 0.9'da ~2.06 m'ye seker (3 m'den bırakılınca, ölçüldü). (a) şıkkında sağ top solla **birebir** aynı seker. |
 
@@ -193,14 +193,14 @@ Son otomatik kontrolün sonucu §8'de.
 - [ ] Geri bildirim metni "çift **farklı** cisimlere etki eder" fikrini açıkça veriyor.
 
 ### Oklar ve sayılar
-| Renk | Etiket | Anlamı | Onay kutusu (sol alt panel) |
+| Renk | Etiket | Anlamı | Onay kutusu (sol alt panel → **Ayarlar**) |
 |---|---|---|---|
-| kırmızı | G | ağırlık (m·g) | Yerçekimi |
+| kırmızı | Fg | ağırlık (m·g) | Yerçekimi |
 | mavi | Fs | hava sürtünmesi | Hava sürtünmesi |
 | yeşil | N | zeminin topa tepkisi | Zemin tepkisi |
 | mor | F | uygulanan kuvvet (seçim / ok aracı) | Uygulanan kuvvet |
 | sarı | Fnet | ölçülen net kuvvet (m·a) | Net kuvvet |
-| turuncu | Fnet-G | net kuvvetten yerçekimi çıkarılmış (varsayılan kapalı) | Fnet − G |
+| turuncu | Fnet-Fg | net kuvvetten yerçekimi çıkarılmış (varsayılan kapalı) | Fnet − Fg |
 - [ ] Ok onay kutuları ilgili oku açıp kapatıyor.
 - [ ] Sayılar okunuyor; büyük kuvvetlerde "≈" var.
 - [ ] Sağ ve sol panelde aynı top için **aynı sayı** yazıyor.
@@ -213,7 +213,7 @@ Son otomatik kontrolün sonucu §8'de.
 
 ### Kontroller
 - [ ] **R / Sıfırla** baştan başlatıyor. **Simülasyon hızı** kaydırıcısı zamanı değiştiriyor.
-- [ ] **Ok aracı (sürükle-bırak):** kutuyu işaretle, topa tıklayıp sürükle → kuvvet uygulanıyor. (Şu an bırakınca kuvvet **kalıcı** kalıyor ve top hızlanmaya devam ediyor. Açık soru: böyle mi kalmalı? Mert'e sorulacak.)
+- [ ] **Ok aracı (sürükle-bırak):** (**Ayarlar** altında) kutuyu işaretle, topa tıklayıp sürükle → kuvvet uygulanıyor. (Şu an bırakınca kuvvet **kalıcı** kalıyor ve top hızlanmaya devam ediyor. Açık soru: böyle mi kalmalı? Mert'e sorulacak.)
 
 ### Fizik motoru karşılaştırması
 - [ ] Ayardan motoru değiştir (Yedek Cozucu ↔ Godot Melez) → sol topun sekme yüksekliği birkaç % içinde aynı.
@@ -228,7 +228,7 @@ Son otomatik kontrolün sonucu §8'de.
 ### Pedagojik bakış (İlayda/Berk)
 - [ ] Metinler öğrenci diliyle, kısa ve doğru.
 - [ ] (c)'nin **yanlış** bir dünya olduğu öğrenciye net.
-- [ ] "Fnet − G" oku öğrenciye kafa karıştırıyorsa varsayılan olarak kapalı kalsın mı? (karar; şu an kapalı)
+- [ ] "Fnet − Fg" oku öğrenciye kafa karıştırıyorsa varsayılan olarak kapalı kalsın mı? (karar; şu an kapalı)
 - [ ] Sayılar (≈1000 N gibi) öğrenci için anlamlı mı, yoksa "ağırlığın kaç katı" mı yazılmalı? (karar)
 
 ## 6. Bir şey ters giderse
@@ -285,3 +285,16 @@ Otomatik testler + ekran görüntüleriyle yapıldı. Pedagojik maddeler ekibin 
 | Web: Vercel linki ve Safari | ❌ denenmedi | yalnız yerel dışa aktarım headless Chrome'da denendi |
 | Pedagojik maddeler | — | İlayda/Berk |
 | Durum satırı seçimden sonra | ⚠️ | (a)/(c) seçildikten sonra da "zemin topa hangi kuvveti uygular?" yazmaya devam ediyor |
+
+## 8. Yeni: seçenekler dosyası, referanssız mod, koşu sonu, performans
+
+| Ne | Nerede |
+|---|---|
+| Seçenek metinleri, son sorular, geri bildirimler, cevap kutusu açık/kapalı | `config/secenekler.json` (her alanın açıklaması dosyanın içinde) |
+| "En yüksek: X m" göstergesi: `CANLI` / `SON_REKOR` (varsayılan) / `GIZLI` | `config/sim2_config.tres` → **Koşu sonu → En Yuksek Gosterimi** |
+| Koşunun "bitti" sayılma süresi (rekor + soru penceresi) | `config/sim2_config.tres` → **Koşu sonu → Kosu Sonu Bekleme** |
+| Referanssız mod (soldaki doğru simülasyon gizli) | Oyunda **Ayarlar → Referanssız mod**. Öğrenci sürümü: dışa aktarma ön ayarında *Features → Custom* = `student_build` (mod zorla açık, düğme gizli) |
+| Yazı boyutu %50–150, arayüz boyutu %80–160 | Oyunda **Ayarlar**; `user://arayuz.cfg`'ye kaydedilir |
+| Öğrenci cevapları | `user://cevaplar.csv` (Linux: `~/.local/share/godot/app_userdata/Etki-Tepki Simulasyonu/`) |
+| Atmosfer → uzay geçişi (renkler, başlangıç/bitiş yüksekliği, yıldızlar) | Sahnede **Main/Gokyuzu** düğümünün Inspector'ı |
+| Performans anahtarları + FPS | Sahnede **Main/Performans** (Inspector / Remote) ya da oyunda **Ayarlar → Geliştirici** |

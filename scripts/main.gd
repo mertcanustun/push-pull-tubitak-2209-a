@@ -7,10 +7,19 @@ extends Node3D
 ##   SAG  - Yercekimi ve hava surtunmesi isler, CARPISMA cozulmez.
 ##          Top zemine degdigi an sim durur, ogrenci zemin tepkisini secer.
 ##
-## Secenekler:
+## Secenekler (metinler, son sorular, geri bildirimler: config/secenekler.json).
+## Her secenegin bir "davranis"i var — sagdaki topun ne yapacagi:
 ##   a) yukari F            -> sol tarafla birebir ayni gorsel (dogru)
 ##   b) yukari 100·F        -> top firlar (zemin "daha buyuk" kuvvet uygular yanilgisi)
 ##   c) yukari F + asagi F  -> top durur ("etki ve tepki topun uzerinde birbirini goturur" yanilgisi)
+##   d) davranis c, ama "oklari_gizle": top durur, ustunde HIC kuvvet oku yok
+##      ("kuvvet zemine tepki olarak gecer" yanilgisi)
+##
+## Referanssiz mod (Ayarlar autoload'u): sol top ve paneli gizlenir; sol
+## fizik yine de calisir (a secenegi kuvvetini ondan aliyor).
+##
+## Kosu sonu: secimden cfg.kosu_sonu_bekleme saniye sonra (b'de kamera
+## takibi de bitince) "En yuksek" rekoru ve secenegin son sorusu gosterilir.
 
 ## Kütle/yarıçap/sekme/hava/temas/b-çarpanı/ok-ölçeği/ağır-çekim/ekrandan-çıkış
 ## artık burada SABİT DEĞİL — res://config/sim2_config.tres içinde (kod
@@ -85,6 +94,17 @@ var arrow_on := {
 
 var balls := {}          # "left"/"right" -> Ball (sahnedeki TopSol / TopSag)
 var hud: Hud
+## Main/Performans: yavaslama avi icin efekt anahtarlari (bkz. performans.gd)
+var perf: PerformansDenetimi
+## Secilen secenegin davranisi (a/b/c) — choice ise secenek id'si (a/b/c/d).
+var _davranis := ""
+## Secenek "oklari_gizle": sagdaki topta hic kuvvet oku gosterme (d).
+var _oklari_gizle := false
+## Kosu sonu: secimden beri gecen gercek sure, bitti mi, sagdaki topun
+## secimden sonra ulastigi en yuksek nokta (m, topun alti).
+var _kosu_sure := 0.0
+var _kosu_bitti := false
+var _en_yuksek := 0.0
 var camera: Camera3D
 var drag_ball := ""
 var drag_origin := Vector3.ZERO
@@ -98,6 +118,7 @@ func _ready() -> void:
 	# okunu kuruyoruz.
 	camera = $Camera3D
 	_fov_16_9 = camera.fov
+	_kamera_taban = camera.global_transform
 	get_viewport().size_changed.connect(_kamerayi_uydur)
 	_kamerayi_uydur()
 	_bcam = BGosterimKamera.new()
@@ -108,7 +129,9 @@ func _ready() -> void:
 	_bcam.donus_basladi.connect(_unfreeze_left)
 	drag_arrow = ForceArrow.new(Color(1.0, 1.0, 1.0), "surukle")
 	add_child(drag_arrow)
+	perf = $Performans
 	_build_hud()
+	hud.gelistirici_kur(perf)
 	_build_balls()     # önce toplar: Godot Melez motoru bu node'ları kullanıyor
 	_build_backend()
 	reset_sim()
@@ -130,20 +153,69 @@ func _on_cfg_changed() -> void:
 
 # ------------------------------------------------------------------ kurulum
 
-## Sahne 16:9 icin kadrajlandi (fov dikey aci, KEEP_HEIGHT). Daha dar
-## ekranda (dikey telefon, 4:3'ten dar tablet) yanlar kesilip toplar
-## kadrajdan cikiyordu: yatayda 16:9 goruntunun en az KAMERA_MIN_YATAY
-## kadari gorunsun diye dikey aciyi buyutuyoruz. Genis ekranda degismez.
-const KAMERA_MIN_YATAY := 0.70
+## Sahne 16:9 icin kadrajlandi (fov 54, KEEP_HEIGHT). Arayuz panelleri
+## ekranin bir kismini kapliyor (Hud.sahne_payi_degisti); "aksiyon kutusu"
+## (iki top, birakilma yuksekliginden zemine + oklar) her ekran oraninda
+## panellerin disinda kalan alana sigsin diye:
+##   - gerekirse goruntu acisi buyutulur (asla 16:9'dakinden dar olmaz),
+##   - dikey telefonda bos alan ekranin ust kismindaysa goruntu, perspektifi
+##     bozmadan (lens kaydirma = FRUSTUM ofseti) oraya kaydirilir.
+## Genis ekranda (paneller kenarda kaldiginda) eski kadraj aynen korunur.
+const KUTU_X := HALF_X + 0.3          # top + sola/saga tasan ok etiketleri
+const KUTU_ALT := GROUND_Y - 0.5      # zemindeki topun altina inen oklar
+const KUTU_UST := DROP_HEIGHT + 0.35
 var _fov_16_9 := 54.0
+var _kamera_taban: Transform3D
+var _sahne_payi := Vector4.ZERO       # sol, sag, ust, alt (ekran orani)
+
+func _sahne_payi_degisti(sol: float, sag: float, ust: float, alt: float) -> void:
+	_sahne_payi = Vector4(sol, sag, ust, alt)
+	_kamerayi_uydur()
 
 func _kamerayi_uydur() -> void:
 	var s := get_viewport().get_visible_rect().size
 	if s.x <= 0.0 or s.y <= 0.0:
 		return
-	var t0 := tan(deg_to_rad(_fov_16_9) * 0.5)
-	var t := maxf(t0, KAMERA_MIN_YATAY * t0 * (16.0 / 9.0) / (s.x / s.y))
-	camera.fov = rad_to_deg(2.0 * atan(t))
+	var a := s.x / s.y
+	var t := tan(deg_to_rad(_fov_16_9) * 0.5)   # dikey yari-aci tanjanti
+	# ndc bantlari (-1..1): panellerin disinda kalan alan
+	var bx := maxf(1.0 - 2.0 * maxf(_sahne_payi.x, _sahne_payi.y), 0.3)
+	var b_ust := 1.0 - 2.0 * _sahne_payi.z
+	var b_alt := -1.0 + 2.0 * _sahne_payi.w
+	if b_ust - b_alt < 0.4:
+		b_ust = 1.0
+		b_alt = -1.0
+	var ters := _kamera_taban.affine_inverse()
+	var umin := INF
+	var umax := -INF
+	for x in [-KUTU_X, KUTU_X]:
+		for y in [KUTU_ALT, KUTU_UST]:
+			var p: Vector3 = ters * Vector3(x, y, 0.0)
+			var d := -p.z
+			t = maxf(t, absf(p.x / d) / (a * bx))
+			umin = minf(umin, p.y / d)
+			umax = maxf(umax, p.y / d)
+	# kaydirmadan sigdirmak icin gereken aci ...
+	var t_duz := t
+	if umax > 0.0 and b_ust > 0.0:
+		t_duz = maxf(t_duz, umax / b_ust)
+	if umin < 0.0 and b_alt < 0.0:
+		t_duz = maxf(t_duz, umin / b_alt)
+	if b_ust <= 0.0 or b_alt >= 0.0:
+		t_duz = INF
+	# ... ve lens kaydirarak gereken aci
+	var t_kay := maxf(t, (umax - umin) / (b_ust - b_alt))
+	var merkez := 0.0   # frustum merkezinin dikey kaymasi (tanjant cinsinden)
+	if t_kay < t_duz * 0.98:
+		t = t_kay
+		merkez = (umax + umin) * 0.5 - (b_ust + b_alt) * 0.5 * t
+	else:
+		t = t_duz
+	camera.keep_aspect = Camera3D.KEEP_HEIGHT
+	camera.projection = Camera3D.PROJECTION_FRUSTUM
+	camera.size = 2.0 * camera.near * t
+	camera.frustum_offset = Vector2(0.0, merkez * camera.near)
+
 
 
 func _build_hud() -> void:
@@ -155,6 +227,10 @@ func _build_hud() -> void:
 	hud.arrow_toggled.connect(func(key: String, on: bool): arrow_on[key] = on)
 	hud.tool_toggled.connect(func(on: bool): tool_active = on)
 	hud.choice_made.connect(_on_choice)
+	hud.sahne_payi_degisti.connect(_sahne_payi_degisti)
+	hud.ust_serbest_degisti.connect(func(y: float): _bcam.etiket_ust_ayarla(y))
+	hud.soru_kapandi.connect(_on_soru_kapandi)
+	hud.referanssiz_degisti.connect(func(_on: bool): reset_sim())
 
 
 ## Hangi fizik arka ucu kullanilsin: cfg.backend'den okunur (Inspector/Remote).
@@ -240,6 +316,11 @@ func reset_sim() -> void:
 	if _bcam:
 		_bcam.reset()
 	choice = ""
+	_davranis = ""
+	_oklari_gizle = false
+	_kosu_sure = 0.0
+	_kosu_bitti = false
+	_en_yuksek = 0.0
 	f_real = 0.0
 	v_impact = 0.0
 	impulse_left = 0.0
@@ -257,9 +338,19 @@ func reset_sim() -> void:
 	drag_arrow.set_force(Vector3.ZERO, cfg.ok_olcegi)
 	hud.show_choice(false)
 	hud.show_feedback("")
+	hud.soru_kapat()
+	_referans_uygula()
 	hud.set_start_text("Başlat")
 	hud.set_status("Fizik motoru: %s   -   SPACE / Başlat" % backend.backend_name())
 	_sync_visuals()
+	_update_readouts()
+
+
+## Referanssiz mod (Ayarlar autoload'u): sol top, oklari ve paneli gizli.
+func _referans_uygula() -> void:
+	var goster := not Ayarlar.referanssiz()
+	(balls["left"] as Ball).visible = goster
+	hud.referans_goster(goster)
 
 
 func _on_start() -> void:
@@ -272,6 +363,8 @@ func _on_start() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	if hud.modal_acik():
+		return   # ayarlar / soru penceresi acikken SPACE, R ve ok araci calismaz
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE:
 			_on_start()
@@ -296,6 +389,13 @@ func _process(dt: float) -> void:
 		var p := _mouse_on_plane(get_viewport().get_mouse_position())
 		drag_arrow.global_position = drag_origin
 		drag_arrow.set_force((p - drag_origin) * TOOL_N_PER_M, cfg.ok_olcegi)
+	if phase == Phase.RESOLVED and running and not _kosu_bitti:
+		_kosu_sure += dt / maxf(Engine.time_scale, 1e-6)   # gercek zaman
+		if _kosu_sure >= cfg.kosu_sonu_bekleme and not _bcam.is_active() and not _launch_slow:
+			_kosu_sonu()
+	# Panel sayilari ekran karesi hizinda yeterli (fizik 120 Hz olabiliyor)
+	if perf.panel_okumalari:
+		_update_readouts()
 
 
 func _physics_process(delta: float) -> void:
@@ -307,7 +407,6 @@ func _physics_process(delta: float) -> void:
 		backend.step(step)
 		_after_step(step)
 	_sync_visuals()
-	_update_readouts()
 
 
 ## Godot Melez: adimlari fizik motoru atar. Bu tikin delta'si zaten
@@ -387,7 +486,8 @@ func _after_step(step: float) -> void:
 	# --- sol: gercek carpisma -------------------------------------------
 	if sl.just_hit_ground:
 		left_enter_speed = absf(sl.velocity.y)
-		(balls["left"] as Ball).play_impact(GROUND_Y, left_enter_speed)
+		if (balls["left"] as Ball).visible:   # referanssiz modda sessiz
+			(balls["left"] as Ball).play_impact(GROUND_Y, left_enter_speed)
 
 	# --- sag: carpisma cozulmuyor, temasi biz yakaliyoruz ----------------
 	if hold_right:
@@ -417,23 +517,33 @@ func _after_step(step: float) -> void:
 			_b_escaped = true
 			_launch_slow = false   # firlatma agir cekimi top ekrandan cikinca biter
 			var apex: float = sr.position.y + _rise_height(sr.velocity.y)
-			hud.set_status("Sağdaki top ekrandan çıktı  -  tepe noktası yaklaşık %.0f m   (sol tarafta %.2f m)" % [apex, _rise_height(v_impact * cfg.restitution)])
-			if choice == "b" and (_b_mode == Sim2Config.BGosterim.KAMERA_TAKIP \
+			if cfg.en_yuksek_gosterimi != Sim2Config.EnYuksek.CANLI:
+				hud.set_status("Sağdaki top ekrandan çıktı")
+			elif Ayarlar.referanssiz():
+				hud.set_status("Sağdaki top ekrandan çıktı  -  tepe noktası yaklaşık %.0f m" % apex)
+			else:
+				hud.set_status("Sağdaki top ekrandan çıktı  -  tepe noktası yaklaşık %.0f m   (sol tarafta %.2f m)" % [apex, _rise_height(v_impact * cfg.restitution)])
+			if _davranis == "b" and (_b_mode == Sim2Config.BGosterim.KAMERA_TAKIP \
 					or _b_mode == Sim2Config.BGosterim.IKISI):
 				# Top TUTULMAZ, ucmaya devam eder; kamera onu tepeye kadar izler.
-				_bcam.start_follow(balls["right"])
+				_bcam.start_follow(balls["right"], perf.b_cetveli)
 				_left_frozen = true
 				_left_freeze_pos = sl.position
 				_left_freeze_vel = sl.velocity
 			else:
 				hold_pos = Vector3(HALF_X, cfg.ekrandan_cikis_yuksekligi, 0.0)
 				hold_right = true
+				# top 9 m'de tutuluyor; rekor icin hesaplanan tepe noktasi
+				_en_yuksek = maxf(_en_yuksek, apex - cfg.radius)
 		elif _bcam.is_following() and sr.velocity.y <= 0.0:
 			# Kamera takibinde tepe noktasi: topu orada tut (geri dusup yeniden
 			# "temas" tetiklemesin), kamera kisa bekleyip geri donsun.
 			hold_pos = sr.position
 			hold_right = true
 			_bcam.notify_apex(sr.position.y - cfg.radius)
+
+	if phase == Phase.RESOLVED:
+		_en_yuksek = maxf(_en_yuksek, sr.position.y - cfg.radius)
 
 	if impulse_left > 0.0:
 		impulse_left -= _applied_f * step
@@ -491,14 +601,20 @@ func _enter_choice(sl: PhysicsBackend.BodyState, sr: PhysicsBackend.BodyState) -
 func _on_choice(c: String) -> void:
 	if phase != Phase.CHOICE:
 		return
+	var sec := Ayarlar.secenek(c)
 	choice = c
+	_davranis = str(sec.get("davranis", c))
+	_oklari_gizle = bool(sec.get("oklari_gizle", false))
 	phase = Phase.RESOLVED
+	_kosu_sure = 0.0
+	_kosu_bitti = false
+	_en_yuksek = 0.0
 	hud.show_choice(false)
 	var sr := backend.get_state("right")
 	_apply_choice_force(sr)
 	(balls["right"] as Ball).play_impact(GROUND_Y, v_impact)
 	_show_feedback()
-	if c == "b":
+	if _davranis == "b":
 		_b_mode = cfg.b_gosterim
 		# Firlatma agir cekimi SECIM ANINDA tetiklenir — _slowmo()'nun
 		# "zemine yaklasiyor ve asagi hizli" kosulu yukari firlayan topu
@@ -515,7 +631,7 @@ func _apply_choice_force(sr: PhysicsBackend.BodyState) -> void:
 	# Her temasta kuvvet o temasin hizindan yeniden hesaplanir; aksi halde
 	# top her ziplamada enerji kazanirdi.
 	f_real = cfg.mass * absf(sr.velocity.y) * (1.0 + cfg.restitution) / cfg.temas_suresi
-	match choice:
+	match _davranis:
 		"a":
 			# Sagdaki topu soldakiyle ayni duruma getir; bundan sonra her
 			# adimda soldakinin zemin kuvvetini alir (_pre_step).
@@ -542,30 +658,39 @@ func _apply_choice_force(sr: PhysicsBackend.BodyState) -> void:
 			impulse_left = 0.0
 
 
+## Geri bildirim metni config/secenekler.json'dan ("geri_bildirim").
+## Referanssiz modda yalnizca "referanssiz_geri_bildirim": true ise gosterilir.
 func _show_feedback() -> void:
-	var txt := ""
-	match choice:
-		"a":
-			txt = "[color=#6ee7a0][b]a) doğru.[/b][/color] Zemin topa yukarı yönlü N ≈ %.0f N uyguluyor; "
-			txt += "top bu impulsla soldaki gerçek simülasyonla aynı yüksekliğe çıkıyor. "
-			txt += "Etki–tepki çifti top ile zemin arasındadır: top zemine aşağı %.0f N uygularken zemin topa yukarı %.0f N uygular. "
-			txt += "İkisi FARKLI cisimlere etki ettiği için birbirini götürmez."
-			txt = txt % [f_real, f_real, f_real]
-		"b":
-			txt = "[color=#ffb84d][b]b) yanlış.[/b][/color] {carpan}·F ≈ {f} N uygulandı ve top bırakıldığı yükseklikten "
-			txt += "çok daha yukarı fırladı — günlük hayatta böyle bir şey görmüyorsun. "
-			txt += "Zemin 'daha güçlü ittiği için' top zıplamıyor; tepki kuvveti etki kuvvetine tam eşittir."
-			txt = txt.format({
-				"carpan": ("%d" % cfg.b_carpani) if is_equal_approx(cfg.b_carpani, roundf(cfg.b_carpani)) else ("%.1f" % cfg.b_carpani),
-				"f": "%.0f" % (cfg.b_carpani * f_real),
-			})
-		"c":
-			txt = "[color=#ff7d7d][b]c) yanlış — ama en sık yapılan hata bu.[/b][/color] Yukarı F ve aşağı F aynı cisme "
-			txt += "etki ettiği için top duruyor. Oysa Newton'un 3. yasasındaki çift AYNI cisme etki etmez: "
-			txt += "biri topa (zemin → top), diğeri zemine (top → zemin) etki eder. "
-			txt += "Topun üzerindeki tek yukarı kuvvet N ≈ %.0f N'dur ve top bu yüzden zıplar. Sol tarafa bak."
-			txt = txt % [f_real]
-	hud.show_feedback(txt)
+	if Ayarlar.referanssiz() and not bool(Ayarlar.veri.get("referanssiz_geri_bildirim", false)):
+		return
+	var carpan := ("%d" % cfg.b_carpani) if is_equal_approx(cfg.b_carpani, roundf(cfg.b_carpani)) else ("%.1f" % cfg.b_carpani)
+	var txt := str(Ayarlar.secenek(choice).get("geri_bildirim", ""))
+	hud.show_feedback(txt.format({
+		"f": "%.0f" % f_real,
+		"fb": "%.0f" % (cfg.b_carpani * f_real),
+		"carpan": carpan,
+	}))
+
+
+## Kosu bitti: rekor (Sim2Config → en_yuksek_gosterimi) ve son soru.
+func _kosu_sonu() -> void:
+	_kosu_bitti = true
+	if cfg.en_yuksek_gosterimi == Sim2Config.EnYuksek.SON_REKOR and _en_yuksek > 0.05:
+		_bcam.rekor_goster(_en_yuksek)
+	var sec := Ayarlar.secenek(choice)
+	var soru := str(sec.get("son_soru", "")).strip_edges()
+	if soru == "":
+		return   # soru henuz yazilmamis (ör. a): pencere acilmaz
+	hud.soru_goster("%s %s" % [sec.get("harf", ""), sec.get("metin", "")], soru,
+		bool(Ayarlar.veri.get("soru_metin_girisi", true)))
+
+
+func _on_soru_kapandi(cevap: String, kaydet: bool) -> void:
+	if not kaydet:
+		return
+	var sec := Ayarlar.secenek(choice)
+	Ayarlar.cevap_kaydet(choice, str(sec.get("metin", "")), str(sec.get("son_soru", "")), cevap)
+	hud.set_status("Cevabın kaydedildi.")
 
 
 # ---------------------------------------------------------------- gorseller
@@ -625,7 +750,8 @@ func _set_arrow(ball: Ball, key: String, force: Vector3, slot: int) -> void:
 	var a: ForceArrow = ball.arrows[key]
 	a.position = Vector3((float(slot) - 1.6) * ARROW_SPACING, 0.0, 0.0)
 	a.label_lift = float(slot) * 0.13
-	if arrow_on.get(key, false):
+	var gizli: bool = not perf.kuvvet_oklari or (_oklari_gizle and ball == balls["right"])
+	if arrow_on.get(key, false) and not gizli:
 		a.set_force(force, cfg.ok_olcegi)
 	else:
 		a.set_force(Vector3.ZERO, cfg.ok_olcegi)
@@ -641,7 +767,7 @@ func _update_readouts() -> void:
 		var h: float = maxf(s.position.y - cfg.radius, 0.0)
 		var t := "[color=#c8cddb]Yükseklik[/color]  %.2f m\n" % h
 		t += "[color=#c8cddb]Hız[/color]  %.2f m/s\n" % s.velocity.y
-		t += "[color=#f05a5a]G[/color] %.1f N   " % (d["gravity"] as Vector3).length()
+		t += "[color=#f05a5a]Fg[/color] %.1f N   " % (d["gravity"] as Vector3).length()
 		t += "[color=#6bb8ff]Fs[/color] %.2f N   " % (d["drag"] as Vector3).length()
 		t += "[color=#66e68c]N[/color] %.0f N\n" % (d["contact"] as Vector3).length()
 		t += "[color=#ffd83d]Fnet[/color] %.0f N" % (d["net"] as Vector3).length()
@@ -654,8 +780,14 @@ func _update_readouts() -> void:
 
 func _mouse_on_plane(screen_pos: Vector2) -> Vector3:
 	# Toplar z = 0 duzleminde; fareyi o duzleme izdusur.
-	var from := camera.project_ray_origin(screen_pos)
-	var dir := camera.project_ray_normal(screen_pos)
+	# Isin projeksiyon matrisinin tersinden kurulur: kamera.project_ray_*
+	# FRUSTUM ofsetini (dikey ekrandaki lens kaydirma) hesaba katmiyor.
+	var vp := get_viewport().get_visible_rect().size
+	var ndc := Vector2(screen_pos.x / vp.x * 2.0 - 1.0, 1.0 - screen_pos.y / vp.y * 2.0)
+	var h: Vector4 = camera.get_camera_projection().inverse() * Vector4(ndc.x, ndc.y, 1.0, 1.0)
+	var yerel := Vector3(h.x, h.y, h.z) / h.w
+	var from := camera.global_position
+	var dir := (camera.global_basis * yerel).normalized()
 	if absf(dir.z) < 0.0001:
 		return from
 	var t := -from.z / dir.z

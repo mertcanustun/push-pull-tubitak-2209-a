@@ -44,7 +44,8 @@ func setup(cfg: Sim2Config, cam: Camera3D, is_running: Callable) -> void:
 	_layer.layer = 5
 	add_child(_layer)
 	_label = Label.new()
-	_label.add_theme_font_size_override("font_size", 30)
+	_label.add_theme_font_size_override("font_size", Ayarlar.fs(30))
+	Ayarlar.degisti.connect(func(): _label.add_theme_font_size_override("font_size", Ayarlar.fs(30)))
 	_label.add_theme_color_override("font_color", Color("ffd54a"))
 	_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.85))
 	_label.add_theme_constant_override("outline_size", 8)
@@ -56,6 +57,13 @@ func setup(cfg: Sim2Config, cam: Camera3D, is_running: Callable) -> void:
 	_layer.add_child(_label)
 
 
+## Hud ust kisimda (baslik / geri bildirim) yer kapladikca main.gd cagirir:
+## yukseklik yazisi onlarin altinda kalsin.
+func etiket_ust_ayarla(y: float) -> void:
+	if _label:
+		_label.offset_top = y
+
+
 func is_following() -> bool:
 	return durum == Durum.TAKIP
 
@@ -63,13 +71,26 @@ func is_active() -> bool:
 	return durum != Durum.BOS
 
 
-## Top ekrandan çıktığı anda main.gd çağırır.
-func start_follow(ball: Node3D) -> void:
+## Top ekrandan çıktığı anda main.gd çağırır. cetvel: yükseklik cetveli
+## kurulsun mu (Main/Performans → b_cetveli).
+func start_follow(ball: Node3D, cetvel: bool = true) -> void:
 	_ball = ball
 	_t = 0.0
 	_max_cam_y = 0.0
 	durum = Durum.TAKIP
-	_build_markers()
+	if cetvel:
+		_build_markers()
+	_label.visible = _canli()
+
+
+## Sim2Config → en_yuksek_gosterimi: CANLI ise takip boyunca sayaç görünür.
+func _canli() -> bool:
+	return _cfg.en_yuksek_gosterimi == Sim2Config.EnYuksek.CANLI
+
+
+## Koşu sonu rekoru (SON_REKOR modunda main.gd çağırır). Sıfırla'ya kadar kalır.
+func rekor_goster(yukseklik_m: float) -> void:
+	_label.text = "En yüksek: %s m" % (("%.1f" % yukseklik_m) if yukseklik_m < 10.0 else ("%.0f" % yukseklik_m))
 	_label.visible = true
 
 
@@ -109,7 +130,8 @@ func _process(delta: float) -> void:
 			var w := clampf(_t / BASLANGIC_GECISI, 0.0, 1.0)
 			_cam.global_transform = _base.interpolate_with(target, w)
 			_max_cam_y = maxf(_max_cam_y, _cam.global_position.y)
-			_label.text = "Sağdaki top: %.0f m  ↑" % maxf(h - 0.119, 0.0)
+			_label.text = "Sağdaki top: %.0f m  ↑" % maxf(h - _cfg.radius, 0.0)
+			_label.visible = _canli()
 			if _t >= _cfg.kamera_takip_suresi:
 				durum = Durum.BEKLE
 				_t = 0.0

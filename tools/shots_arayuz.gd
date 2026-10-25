@@ -2,10 +2,12 @@ extends SceneTree
 ## Arayüz doğrulama: farklı ekran boyutu / DPI'da açılış, seçim ve geri
 ## bildirim karelerini çeker. --headless İLE ÇALIŞMAZ (gerçek render gerekir).
 ##     godot --path . --script tools/shots_arayuz.gd -- --boyut=2340x1080 --arayuz-dpi=460 --ad=telefon_yatay
+## --secim=a|b|c hangi seçeneğin seçileceği (varsayılan c; b'de takip karesi de çekilir).
 ## --arayuz-dpi telefonu taklit eder (web'de DPI = 96 x devicePixelRatio).
 ## PNG'ler res://tools/shots_arayuz/ altına yazılır (ya da --cikis=<mutlak yol>).
 var OUT := "res://tools/shots_arayuz"
 var AD := "ekran"
+var SECIM := "c"
 
 func _init() -> void:
 	var boyut := Vector2i(1920, 1080)
@@ -15,6 +17,8 @@ func _init() -> void:
 			boyut = Vector2i(int(p[0]), int(p[1]))
 		elif a.begins_with("--ad="):
 			AD = a.trim_prefix("--ad=")
+		elif a.begins_with("--secim="):
+			SECIM = a.trim_prefix("--secim=")
 		elif a.begins_with("--cikis="):
 			OUT = a.trim_prefix("--cikis=")
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
@@ -27,8 +31,8 @@ func _init() -> void:
 	var main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 	await _w(0.6)
-	print("pencere=%s  olcek=%.3f  dp=%s  fov=%.1f" % [root.size, root.content_scale_factor,
-		root.get_visible_rect().size, main.camera.fov])
+	print("pencere=%s  olcek=%.3f  dp=%s  kamera=%.4f/%s" % [root.size, root.content_scale_factor,
+		root.get_visible_rect().size, main.camera.size, main.camera.frustum_offset])
 	await _s("1_acilis")
 
 	main._on_start()
@@ -39,9 +43,12 @@ func _init() -> void:
 	await _w(0.3)
 	await _s("2_secim")
 
-	main._on_choice("c")
+	main._on_choice(SECIM)
 	await _w(0.5)
 	await _s("3_geri_bildirim")
+	if SECIM == "b":
+		await _w(1.5)
+		await _s("4_b_takip")
 	quit(0)
 
 func _w(sec: float) -> void:

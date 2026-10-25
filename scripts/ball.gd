@@ -44,6 +44,9 @@ class_name Ball
 @export_range(0.0, 1.0, 0.01) var pitch_range: float = 0.28
 
 var arrows: Dictionary = {}   # anahtar -> ForceArrow ("gravity", "drag", ...)
+## Performans testi (Main/Performans): toz / ses kapatılabilir.
+var toz_acik := true
+var ses_acik := true
 ## SERBEST modda (Godot Melez) her fizik adımının başında çağrılır —
 ## hava direnci ve zemin temasını GodotBackend buradan uygular.
 var integrator: Callable = Callable()
@@ -88,10 +91,11 @@ func set_puppet(on: bool) -> void:
 
 ## Toz + ses. impact_speed çarpma hızı (m/s) — sesin sertliğini belirler.
 func play_impact(ground_y: float, impact_speed: float) -> void:
-	_dust.global_position = Vector3(global_position.x, ground_y + 0.02, global_position.z)
-	_dust.restart()
-	_dust.emitting = true
-	if _audio.stream:
+	if toz_acik:
+		_dust.global_position = Vector3(global_position.x, ground_y + 0.02, global_position.z)
+		_dust.restart()
+		_dust.emitting = true
+	if ses_acik and _audio.stream:
 		var s: float = clampf(impact_speed / impact_full_speed, impact_min_volume, 1.0)
 		_audio.volume_db = linear_to_db(s)
 		_audio.pitch_scale = pitch_min + pitch_range * s

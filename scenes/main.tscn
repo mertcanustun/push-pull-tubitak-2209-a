@@ -1,7 +1,9 @@
-[gd_scene load_steps=117 format=3 uid="uid://c3nvjk56qjdj1"]
+[gd_scene load_steps=119 format=3 uid="uid://c3nvjk56qjdj1"]
 
 [ext_resource type="Script" path="res://scripts/main.gd" id="1_o5qli"]
 [ext_resource type="PackedScene" path="res://scenes/ball.tscn" id="2_sugp2"]
+[ext_resource type="Script" path="res://scripts/gokyuzu.gd" id="3_gokyz"]
+[ext_resource type="Script" path="res://scripts/performans.gd" id="4_perfm"]
 
 [sub_resource type="Environment" id="Environment_0wfyh"]
 background_mode = 1
@@ -999,3 +1001,9 @@ billboard = 1
 modulate = Color(1, 1, 1, 0.5)
 text = "3 m"
 font_size = 40
+
+[node name="Gokyuzu" type="Node" parent="."]
+script = ExtResource("3_gokyz")
+
+[node name="Performans" type="Node" parent="."]
+script = ExtResource("4_perfm")

@@ -19,9 +19,17 @@ MuJoCo'yu gerçekten devreye almak için → `MUJOCO_KURULUM.md`.
 |---|---|
 | `SPACE` / Başlat | başlat – duraklat |
 | `R` / Sıfırla | baştan |
+| Ayarlar ▾ | aşağıdaki dört ayarı açar/kapar (yer varsa kendiliğinden açık) |
 | Hız kaydırıcısı | 0.05× – 1.5× |
 | Onay kutuları | hangi kuvvet oklarının görüneceği |
-| Ok aracı | topa tıklayıp sürükle, bıraktığında o kuvvet cisme uygulanır |
+| Ok aracı | topa tıklayıp (dokunup) sürükle, bıraktığında o kuvvet cisme uygulanır |
+| Arayüz boyutu A− / A+ | %80 – %160, bu cihazda hatırlanır |
+| Panel başlığı (SOL / SAĞ) | açıklama metnini göster / gizle |
+
+Arayüz ekran DPI'ına göre ölçeklenir (dokunma hedefleri ≥ 44–48 dp,
+gövde yazısı 15–17 dp) ve ekran şekline göre yerleşir: masaüstü/yatay
+tablet, yatay telefon, dikey telefon. Farklı ekranları denemek için
+`tools/shots_arayuz.gd` (kullanım dosyanın başında).
 
 Temas anı ~8 ms sürdüğü için top zemine yaklaşırken **zaman otomatik
 yavaşlar** (0.05×). Yoksa temas kuvveti okunu tek karede görürdün.
@@ -62,12 +70,12 @@ bir yaklaşım değil.
 
 | Ok | Anlamı |
 |---|---|
-| kırmızı `G` | `m·g` |
+| kırmızı `Fg` | `m·g` |
 | mavi `Fs` | hava sürtünmesi |
 | yeşil `N` | zemin tepki kuvveti |
 | mor `F` | senin uyguladığın kuvvet (ok aracı / seçim) |
 | sarı `Fnet` | ölçülen net kuvvet, `m·a` |
-| turuncu `Fnet − G` | net kuvvetten yerçekimi vektörel olarak çıkarılmış |
+| turuncu `Fnet − Fg` | net kuvvetten yerçekimi vektörel olarak çıkarılmış |
 
 Ok uzunlukları **logaritmiktir**: bu sahnede yerçekimi ~6 N, temas kuvveti
 ~1000 N, (b) seçeneği ~100.000 N. Doğrusal ölçekte küçük oklar görünmezdi.

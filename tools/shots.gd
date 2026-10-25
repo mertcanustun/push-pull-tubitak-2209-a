@@ -4,9 +4,22 @@ extends SceneTree
 ## PNG üretir) — normal pencereli modda çalıştır:
 ##     godot --path . --script tools/shots.gd
 ## PNG'ler res://tools/shots/ altına yazılır (proje köküne göreli, kolay okuma için).
-const OUT := "res://tools/shots"
+## Motor seçmek için:  ... --script tools/shots.gd -- --motor=godot   (ya da yedek)
+##   → res://tools/shots_godot/ (ya da shots_yedek/) altına yazar.
+var OUT := "res://tools/shots"
+## ÜYE değişken olmalı: yerel olursa kapsam bitince kaynak serbest kalır,
+## önbellek onu tutmaz ve main.tscn varsayılan değerli YENİ bir kopya yükler.
+var cfg: Sim2Config = load("res://config/sim2_config.tres")
 
 func _init() -> void:
+	for a in OS.get_cmdline_user_args():
+		if a.begins_with("--motor="):
+			var m := a.trim_prefix("--motor=")
+			match m:
+				"godot": cfg.backend = Sim2Config.Backend.GODOT_MELEZ
+				"yedek": cfg.backend = Sim2Config.Backend.YEDEK_COZUCU
+				_: cfg.backend = Sim2Config.Backend.MUJOCO
+			OUT = "res://tools/shots_" + m
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(OUT))
 	var main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)

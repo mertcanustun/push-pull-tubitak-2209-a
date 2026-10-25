@@ -28,6 +28,11 @@ class BodyState extends RefCounted:
 	var just_hit_ground := false
 	## O temas boyunca biriken dusey impuls (N*s). "Gercek F" bundan cikar.
 	var contact_impulse := 0.0
+	## Son (ya da suren) temasin olcumleri - motor karsilastirmasi icin
+	## (docs/motor-karsilastirma.md). Yeni temas baslayinca sifirlanir.
+	var contact_step_count := 0      # temas suresince kac entegrasyon adimi
+	var contact_duration := 0.0      # simule saniye
+	var contact_peak := 0.0          # en buyuk N (Newton)
 
 
 ## Bir cismin tanimi.
@@ -39,6 +44,10 @@ class BodySpec extends RefCounted:
 	var velocity := Vector3.ZERO
 	var restitution := 0.76     # basketbol: 1.8 m'den birakinca ~1.05 m
 	var drag_coefficient := 0.47  # kure
+	var air_density := 1.225      # kg/m^3 - deniz seviyesi
+	## Yay sabiti (N/m) - yalnizca NativeBackend kullanir (yay-sonum temas
+	## modeli). Sonum restitution'dan turetilir (bkz. native_backend.gd).
+	var stiffness := 1.0e5
 	## false ise: yercekimi ve hava surtunmesi isler ama CARPISMA islemez.
 	## Sahnenin sag yarisi bunu kullanir (senaryo planindaki istek).
 	var collisions_enabled := true
@@ -91,12 +100,35 @@ func get_state(_id: String) -> BodyState:
 func reset() -> void:
 	pass
 
+## true ise cisimleri Godot'nun fizik motoru adimlar (GodotBackend); main.gd
+## bu durumda zamani Engine.time_scale ile yavaslatir ve top node'larinin
+## konumunu yazmaz. false ise step(dt) entegrasyonu kendisi yapar.
+func engine_driven() -> bool:
+	return false
+
+## Motor-surumlu arka uclar icin: simulasyon ilerlesin mi (Baslat/Duraklat,
+## secim ekrani). Diger arka uclarda main.gd step() cagirmayarak durdurur.
+func set_running(_on: bool) -> void:
+	pass
+
+## (a) secenegi: target cismine, source cisminin zeminden aldigi temas
+## kuvvetinin AYNISI, AYNI adimda ve ayni bicimde (kuvvet olarak) uygulanir.
+## Bos id'ler kapatir. Destekleyen arka uc true doner; desteklemeyende main.gd
+## dis kuvvetle yaklasik aynalar. reset() aynalamayi kapatir.
+func set_contact_mirror(_source: String, _target: String) -> bool:
+	return false
+
+## Arka uc degistirilirken / sahne kapanirken cagrilir; global ayarlari
+## (Engine.time_scale vb.) geri almak icin.
+func shutdown() -> void:
+	pass
+
 ## Yercekimi ve hava surtunmesi her iki arka uc icin de ayni formulle
 ## hesaplanir, boylece iki yari arasindaki karsilastirma adil kalir.
-static func drag_force(velocity: Vector3, radius: float, cd: float) -> Vector3:
+static func drag_force(velocity: Vector3, radius: float, cd: float, density: float = AIR_DENSITY) -> Vector3:
 	var speed := velocity.length()
 	if speed < 0.0001:
 		return Vector3.ZERO
 	var area := PI * radius * radius
 	# F_d = -1/2 * rho * Cd * A * |v| * v
-	return -0.5 * AIR_DENSITY * cd * area * speed * velocity
+	return -0.5 * density * cd * area * speed * velocity

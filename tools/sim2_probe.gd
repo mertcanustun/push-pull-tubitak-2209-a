@@ -14,6 +14,8 @@ const DT := 1.0 / 240.0  # ince adım - ölçüm hassasiyeti için
 func _init() -> void:
 	# Bu test _physics_process'i ELLE çağırır — yalnızca kendi adımını atan
 	# motorlarda geçerli. Kaydedilmiş varsayılan ne olursa olsun Yedek Çözücü.
+	# Autoload'lar (Ayarlar) ilk kareden önce yok; main.gd onları kullanıyor.
+	await process_frame
 	var cfg: Sim2Config = load("res://config/sim2_config.tres")
 	cfg.backend = Sim2Config.Backend.YEDEK_COZUCU
 	var main = load("res://scenes/main.tscn").instantiate()

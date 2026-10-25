@@ -1,0 +1,46 @@
+[gd_resource type="Resource" script_class="SecenekAyarlari" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/secenek_ayarlari.gd" id="1_vqv7w"]
+[ext_resource type="Script" path="res://scripts/secenek.gd" id="2_vb7xq"]
+
+[sub_resource type="Resource" id="Resource_lvpdh"]
+script = ExtResource("2_vb7xq")
+id = "a"
+harf = "a)"
+metin = "Top ve Zemin birbirine aynı büyüklükte kuvvet uygular"
+geri_bildirim = "[color=#6ee7a0][b]a) doğru.[/b][/color] Zemin topa yukarı yönlü N ≈ {f} N uyguluyor; top bu impulsla soldaki gerçek simülasyonla aynı yüksekliğe çıkıyor. Etki–tepki çifti top ile zemin arasındadır: top zemine aşağı {f} N uygularken zemin topa yukarı {f} N uygular. İkisi FARKLI cisimlere etki ettiği için birbirini götürmez."
+
+[sub_resource type="Resource" id="Resource_vni16"]
+script = ExtResource("2_vb7xq")
+id = "b"
+harf = "b)"
+metin = "Top daha küçük olduğu için Zemin topun ona uyguladığından daha büyük bir kuvvet uygular"
+davranis = "b"
+son_soru = "Sence top neden fırladı? Topun zemine uyguladığı kuvvetin büyüklüğü ne kadar olabilir?"
+geri_bildirim = "[color=#ffb84d][b]b) yanlış.[/b][/color] {carpan}·F ≈ {fb} N uygulandı ve top bırakıldığı yükseklikten çok daha yukarı fırladı — günlük hayatta böyle bir şey görmüyorsun. Zemin 'daha güçlü ittiği için' top zıplamıyor; tepki kuvveti etki kuvvetine tam eşittir."
+
+[sub_resource type="Resource" id="Resource_pvioc"]
+script = ExtResource("2_vb7xq")
+id = "c"
+harf = "c)"
+metin = "Topa hem etki hem de tepki kuvvetleri etki eder."
+davranis = "c"
+son_soru = "Sence topun hareketsiz kalmasındaki sebep nedir? Hangi kuvvetin harekete sebep olmasını bekliyordun?"
+geri_bildirim = "[color=#ff7d7d][b]c) yanlış — ama en sık yapılan hata bu.[/b][/color] Yukarı F ve aşağı F aynı cisme etki ettiği için top duruyor. Oysa Newton'un 3. yasasındaki çift AYNI cisme etki etmez: biri topa (zemin → top), diğeri zemine (top → zemin) etki eder. Topun üzerindeki tek yukarı kuvvet N ≈ {f} N'dur ve top bu yüzden zıplar. Sol tarafa bak."
+
+[sub_resource type="Resource" id="Resource_dkrih"]
+script = ExtResource("2_vb7xq")
+id = "d"
+harf = "d)"
+metin = "Toptaki etki kuvveti zemine tepki olarak geçer"
+davranis = "c"
+oklari_gizle = true
+son_soru = "Sence top neden hareket etmiyor? Topun üzerinde hangi kuvvetin harekete sebep olmasını bekliyordun?"
+geri_bildirim = "[color=#ff7d7d][b]d) yanlış.[/b][/color] Kuvvet bir cisimden diğerine aktarılan bir şey değildir. Top zemine aşağı yönlü {f} N uygularken zemin de AYNI ANDA topa yukarı yönlü {f} N uygular; bunlar iki ayrı kuvvettir. Topun üzerindeki bu yukarı kuvvet topu zıplatır. Sol tarafa bak."
+
+[resource]
+script = ExtResource("1_vqv7w")
+secim_basligi = "Top tam zemine değdi. Zemin topa hangi kuvveti uygular?"
+secim_ipucu = "Sol taraf gerçek fiziği gösteriyor. Sağdaki top için sen karar ver."
+secim_ipucu_referanssiz = "Sağdaki top için sen karar ver."
+secenekler = Array[ExtResource("2_vb7xq")]([SubResource("Resource_lvpdh"), SubResource("Resource_vni16"), SubResource("Resource_pvioc"), SubResource("Resource_dkrih")])

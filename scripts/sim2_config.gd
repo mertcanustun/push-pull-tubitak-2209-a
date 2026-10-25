@@ -13,7 +13,7 @@ extends Resource
 ##   - Top / Hava / Temas grupları: bir sonraki Sıfırla'da (R) işler
 ##     (ör. Restitution'ı 0.76 → 0.5 yap, R'ye bas, sol top daha az seker).
 ##   - Fizik Motoru: değişince sahne kendiliğinden sıfırlanır.
-##   - Seçenekler / Görsel / (b) gösterimi / Hava Modeli: anında işler.
+##   - Seçenekler / Görsel / Görünüm / (b) gösterimi / Hava Modeli: anında işler.
 ##
 ## ÖNEMLİ — MuJoCo motoru hakkında: aşağıdaki Top/Hava/Temas değerleri
 ## MuJoCo seçiliyken yalnızca GDScript tarafındaki kayıtları (ok büyüklüğü,
@@ -107,12 +107,30 @@ enum EnYuksek { CANLI, SON_REKOR, GIZLI }
 ##               (Sıfırla'ya kadar ekranda kalır)
 ##   GIZLI     - hiç gösterilmez
 ## Anında işler.
-@export var en_yuksek_gosterimi: EnYuksek = EnYuksek.SON_REKOR
+@export var en_yuksek_gosterimi: EnYuksek = EnYuksek.GIZLI
 ## Seçimden sonra koşunun "bitti" sayılması için geçen süre (gerçek saniye,
-## duraklatma sayılmaz). (b)'de ayrıca kamera takibinin bitmesi beklenir.
-## Koşu bitince rekor (yukarıda) ve seçeneğin son sorusu
-## (config/secenekler.json) gösterilir.
+## duraklatma sayılmaz). Süre dolunca koşu HER DURUMDA biter: (b)'de kamera
+## takibi sürüyorsa kamera ana poza döner. Koşu bitince rekor (yukarıda) ve
+## seçeneğin son sorusu (config/secenekler.tres) gösterilir.
 @export_range(0.5, 30.0, 0.5, "suffix:sn") var kosu_sonu_bekleme: float = 4.0
+
+@export_group("Görünüm")
+## Başlık ("ETKİ – TEPKİ: …") ve altındaki durum yazısı. Anında işler.
+@export var ust_yazilar: bool = false
+## SOL / SAĞ durum panelleri (yükseklik, hız, kuvvetler). Anında işler.
+@export var durum_panelleri: bool = false
+## Seçimden sonra alttaki doğru/yanlış açıklaması. Anında işler.
+@export var geri_bildirim: bool = false
+## Sahnedeki 1 / 2 / 3 m cetvelleri ve (b) kamera takibindeki yükseklik
+## cetveli. Anında işler.
+@export var cetveller: bool = false
+## Okların yanında kuvvet büyüklüğü ("Fg 6.1 N"). Kapalıyken yalnız ad
+## ("Fg") yazar. Anında işler.
+@export var ok_degerleri: bool = false
+## Temas ağır çekimi seçimden SONRA da sürsün mü. Kapalıyken yalnızca ilk
+## çarpma (seçim anı) yavaşlar; sonraki sekmeler normal hızda görünür (fizik
+## adımı yine aynı küçüklükte, yalnızca saniyede daha çok adım atılır).
+@export var secimden_sonra_agir_cekim: bool = false
 
 @export_group("(b) gösterimi")
 ## (b)'de top ~1200 m/s ile fırlar: 9 m'ye (ekrandan çıkış) 11 ms'de varır,
@@ -123,7 +141,7 @@ enum EnYuksek { CANLI, SON_REKOR, GIZLI }
 ##                 kısa bekler, sonra ana kamera pozuna geri döner
 ##   IKISI: önce fırlatma ağır çekimde, sonra kamera takibi
 ##   HICBIRI: eski davranış (top 9 m'de durdurulur, yalnızca yazı)
-@export var b_gosterim: BGosterim = BGosterim.IKISI
+@export var b_gosterim: BGosterim = BGosterim.KAMERA_TAKIP
 ## Fırlatma ağır çekim çarpanı (0.01 → ilk 9 m yaklaşık 1 saniyede izlenir).
 @export_range(0.001, 1.0, 0.001) var firlatma_agir_cekim_carpani: float = 0.01
 ## Fırlatma ağır çekiminin üst sınırı (gerçek saniye). Normalde top ekrandan

@@ -70,7 +70,7 @@ const ARROW_DEFS := [
 	["drag", "Hava sürtünmesi  Fs", Color(0.42, 0.72, 1.00), true],
 	["contact", "Zemin tepkisi  N", Color(0.40, 0.90, 0.55), true],
 	["external", "Uygulanan kuvvet  F", Color(0.85, 0.55, 1.00), true],
-	["net", "Net kuvvet  Fnet", Color(1.00, 0.85, 0.25), true],
+	["net", "Net kuvvet  Fnet", Color(1.00, 0.85, 0.25), false],
 	["net_minus_g", "Fnet − Fg", Color(1.00, 0.55, 0.15), false],
 ]
 
@@ -132,6 +132,10 @@ var _secim_icerik: VBoxContainer
 var _geri_kaydir: ScrollContainer
 
 var _mod := Mod.GENIS
+## Sim2Config → Görünüm (main.gd gorunum_ayarla ile verir) ve referanssız mod
+var _ust_goster := true
+var _panel_goster := true
+var _referans := true
 var _aciklama_kullanici := [false, false]
 var _geri_ustte := false
 var _yerlesim_sayac := 0
@@ -189,6 +193,11 @@ func _dpi() -> float:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--arayuz-dpi="):
 			return a.trim_prefix("--arayuz-dpi=").to_float()
+	# macOS fiziksel DPI'yi verir (Retina ~257); sistem ve tarayici ise 2.0x
+	# kullanir. Web'deki gibi (96 x devicePixelRatio) olcekten hesapla, yoksa
+	# arayuz Mac'te web surumunden %34 buyuk cikar.
+	if OS.has_feature("macos"):
+		return 96.0 * DisplayServer.screen_get_scale()
 	var d := float(DisplayServer.screen_get_dpi())
 	return d if d > 0.0 else 96.0
 
@@ -727,7 +736,7 @@ func _build_choice_panel() -> void:
 	_secim_ipucu = _sarmali(_label(Ayarlar.metin("secim_ipucu"), 16, MUTED))
 	_secim_icerik.add_child(_secim_ipucu)
 
-	# Secenekler config/secenekler.json'dan (Ayarlar.secenek_listesi); kac
+	# Secenekler config/secenekler.tres'ten (Ayarlar.secenek_listesi); kac
 	# tane olursa olsun alt alta, kaydirilabilir alanda.
 	for opt in Ayarlar.secenek_listesi():
 		var b := Button.new()
@@ -975,8 +984,9 @@ func _sinirla(w: float, h: float) -> void:
 
 
 func _sahne_payini_bildir(w: float, h: float, yan_w: float) -> void:
-	var ust := (_baslik_kutu.get_global_rect().end.y + 4.0) / h
-	var serbest := _baslik_kutu.get_global_rect().end.y
+	var ust_y := _baslik_kutu.get_global_rect().end.y if _ust_goster else KENAR * 0.5
+	var ust := (ust_y + 4.0) / h
+	var serbest := ust_y
 	if _feedback_panel.visible and _geri_ustte:
 		serbest = maxf(serbest, _feedback_panel.get_global_rect().end.y)
 	ust_serbest_degisti.emit(serbest + 8.0)
@@ -984,7 +994,7 @@ func _sahne_payini_bildir(w: float, h: float, yan_w: float) -> void:
 		var alt := (h - _yan_satir.get_global_rect().position.y + 4.0) / h
 		sahne_payi_degisti.emit(KENAR / w, KENAR / w, ust, alt)
 	else:
-		var yan := (KENAR + yan_w + BOSLUK) / w
+		var yan := (KENAR + yan_w + BOSLUK) / w if _panel_goster else KENAR / w
 		sahne_payi_degisti.emit(yan, yan, ust, 0.0)
 
 
@@ -1023,9 +1033,26 @@ func modal_acik() -> bool:
 	return _ayar_katman.visible or _soru_katman.visible
 
 
+## Sim2Config → Görünüm: baslik + durum yazisi, SOL / SAG panelleri.
+func gorunum_ayarla(ust_yazilar: bool, durum_panelleri: bool) -> void:
+	if ust_yazilar == _ust_goster and durum_panelleri == _panel_goster:
+		return
+	_ust_goster = ust_yazilar
+	_panel_goster = durum_panelleri
+	_gorunurluk_uygula()
+	_yerlestir()
+
+
+func _gorunurluk_uygula() -> void:
+	_baslik_kutu.visible = _ust_goster
+	_yan[0]["panel"].visible = _referans and _panel_goster
+	_yan[1]["panel"].visible = _panel_goster
+
+
 ## Referanssiz mod: soldaki (dogru fizik) panel ve secim ipucu.
 func referans_goster(goster: bool) -> void:
-	_yan[0]["panel"].visible = goster
+	_referans = goster
+	_gorunurluk_uygula()
 	_secim_ipucu.text = Ayarlar.metin("secim_ipucu" if goster else "secim_ipucu_referanssiz")
 	_yerlestir()
 

@@ -290,7 +290,7 @@ Otomatik testler + ekran görüntüleriyle yapıldı. Pedagojik maddeler ekibin 
 
 | Ne | Nerede |
 |---|---|
-| Seçenek metinleri, son sorular, geri bildirimler, cevap kutusu açık/kapalı | `config/secenekler.json` (her alanın açıklaması dosyanın içinde) |
+| Seçenek metinleri, son sorular, geri bildirimler, cevap kutusu açık/kapalı | `config/secenekler.tres` → Inspector (her alanın açıklaması fareyle üstüne gelince) |
 | "En yüksek: X m" göstergesi: `CANLI` / `SON_REKOR` (varsayılan) / `GIZLI` | `config/sim2_config.tres` → **Koşu sonu → En Yuksek Gosterimi** |
 | Koşunun "bitti" sayılma süresi (rekor + soru penceresi) | `config/sim2_config.tres` → **Koşu sonu → Kosu Sonu Bekleme** |
 | Referanssız mod (soldaki doğru simülasyon gizli) | Oyunda **Ayarlar → Referanssız mod**. Öğrenci sürümü: dışa aktarma ön ayarında *Features → Custom* = `student_build` (mod zorla açık, düğme gizli) |

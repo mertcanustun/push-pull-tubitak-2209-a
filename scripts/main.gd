@@ -7,7 +7,8 @@ extends Node3D
 ##   SAG  - Yercekimi ve hava surtunmesi isler, CARPISMA cozulmez.
 ##          Top zemine degdigi an sim durur, ogrenci zemin tepkisini secer.
 ##
-## Secenekler (metinler, son sorular, geri bildirimler: config/secenekler.json).
+## Secenekler (metinler, son sorular, geri bildirimler: config/secenekler.tres,
+## Inspector'dan).
 ## Her secenegin bir "davranis"i var — sagdaki topun ne yapacagi:
 ##   a) yukari F            -> sol tarafla birebir ayni gorsel (dogru)
 ##   b) yukari 100·F        -> top firlar (zemin "daha buyuk" kuvvet uygular yanilgisi)
@@ -18,8 +19,11 @@ extends Node3D
 ## Referanssiz mod (Ayarlar autoload'u): sol top ve paneli gizlenir; sol
 ## fizik yine de calisir (a secenegi kuvvetini ondan aliyor).
 ##
-## Kosu sonu: secimden cfg.kosu_sonu_bekleme saniye sonra (b'de kamera
-## takibi de bitince) "En yuksek" rekoru ve secenegin son sorusu gosterilir.
+## Kosu sonu: secimden cfg.kosu_sonu_bekleme saniye sonra (her durumda; b'de
+## kamera takibi surse bile) "En yuksek" rekoru ve secenegin son sorusu gosterilir.
+##
+## Gorunum (Sim2Config → Görünüm): baslik, SOL/SAG panelleri, geri bildirim,
+## cetveller, ok degerleri, secimden sonra agir cekim — hepsi Inspector'dan.
 
 ## Kütle/yarıçap/sekme/hava/temas/b-çarpanı/ok-ölçeği/ağır-çekim/ekrandan-çıkış
 ## artık burada SABİT DEĞİL — res://config/sim2_config.tres içinde (kod
@@ -89,7 +93,7 @@ var left_enter_speed := 0.0
 
 var arrow_on := {
 	"gravity": true, "drag": true, "contact": true,
-	"external": true, "net": true, "net_minus_g": false,
+	"external": true, "net": false, "net_minus_g": false,
 }
 
 var balls := {}          # "left"/"right" -> Ball (sahnedeki TopSol / TopSag)
@@ -106,6 +110,13 @@ var _kosu_sure := 0.0
 var _kosu_bitti := false
 var _en_yuksek := 0.0
 var camera: Camera3D
+## Sahnedeki sabit 1/2/3 m cetvelleri (Ruler*) — Sim2Config → cetveller.
+var _cetveller: Array[Node3D] = []
+## Gorunum: son uygulanan cetvel durumu (her karede node gezmemek icin).
+var _cetvel_acik := true
+## Godot Melez: secimden sonraki temaslar ag. cekimsiz ama ayni kucuk fizik
+## adimiyla (bkz. _physics_process_engine). Proje varsayilani saklanir.
+var _varsayilan_max_adim := 8
 var drag_ball := ""
 var drag_origin := Vector3.ZERO
 var drag_arrow: ForceArrow
@@ -118,7 +129,12 @@ func _ready() -> void:
 	# okunu kuruyoruz.
 	camera = $Camera3D
 	_fov_16_9 = camera.fov
-	_kamera_taban = camera.global_transform
+	_kamera_ilk = camera.global_transform
+	_kamera_taban = _kamera_ilk
+	_varsayilan_max_adim = Engine.max_physics_steps_per_frame
+	for n in get_children():
+		if n is Node3D and n.name.begins_with("Ruler"):
+			_cetveller.append(n)
 	get_viewport().size_changed.connect(_kamerayi_uydur)
 	_kamerayi_uydur()
 	_bcam = BGosterimKamera.new()
@@ -134,6 +150,7 @@ func _ready() -> void:
 	hud.gelistirici_kur(perf)
 	_build_balls()     # önce toplar: Godot Melez motoru bu node'ları kullanıyor
 	_build_backend()
+	_gorunum_uygula()
 	reset_sim()
 	_last_backend = cfg.backend
 	cfg.changed.connect(_on_cfg_changed)
@@ -162,10 +179,12 @@ func _on_cfg_changed() -> void:
 ##     bozmadan (lens kaydirma = FRUSTUM ofseti) oraya kaydirilir.
 ## Genis ekranda (paneller kenarda kaldiginda) eski kadraj aynen korunur.
 const KUTU_X := HALF_X + 0.3          # top + sola/saga tasan ok etiketleri
+const KUTU_TEK_X := 1.2               # referanssiz: tek top + oklari (merkezden)
 const KUTU_ALT := GROUND_Y - 0.5      # zemindeki topun altina inen oklar
 const KUTU_UST := DROP_HEIGHT + 0.35
 var _fov_16_9 := 54.0
-var _kamera_taban: Transform3D
+var _kamera_ilk: Transform3D     # sahnedeki kamera (iki topun ortasi)
+var _kamera_taban: Transform3D   # su anki ana poz (referanssizda sag topa kayik)
 var _sahne_payi := Vector4.ZERO       # sol, sag, ust, alt (ekran orani)
 
 func _sahne_payi_degisti(sol: float, sag: float, ust: float, alt: float) -> void:
@@ -188,7 +207,10 @@ func _kamerayi_uydur() -> void:
 	var ters := _kamera_taban.affine_inverse()
 	var umin := INF
 	var umax := -INF
-	for x in [-KUTU_X, KUTU_X]:
+	# Referanssiz modda tek top var: kutu o topun etrafinda (kamera ona kayik)
+	var cx := _kamera_taban.origin.x
+	var kutu: Array = [cx - KUTU_TEK_X, cx + KUTU_TEK_X] if Ayarlar.referanssiz() else [-KUTU_X, KUTU_X]
+	for x in kutu:
 		for y in [KUTU_ALT, KUTU_UST]:
 			var p: Vector3 = ters * Vector3(x, y, 0.0)
 			var d := -p.z
@@ -346,11 +368,30 @@ func reset_sim() -> void:
 	_update_readouts()
 
 
-## Referanssiz mod (Ayarlar autoload'u): sol top, oklari ve paneli gizli.
+## Referanssiz mod (Ayarlar autoload'u): sol top, oklari ve paneli gizli;
+## ekranda tek top kaldigi icin kamera onu ortalar, ayirici cizgi gizlenir.
 func _referans_uygula() -> void:
 	var goster := not Ayarlar.referanssiz()
 	(balls["left"] as Ball).visible = goster
 	hud.referans_goster(goster)
+	$Divider.visible = goster
+	_kamera_taban = _kamera_ilk
+	if not goster:
+		_kamera_taban.origin.x += HALF_X   # sag topu ortala
+	camera.global_transform = _kamera_taban
+	_bcam.taban_ayarla(_kamera_taban)
+	_kamerayi_uydur()
+
+
+## Sim2Config → Görünüm. Her karede cagrilir (Remote'tan canli degisebilsin);
+## yalnizca degisen sey dokunulur.
+func _gorunum_uygula() -> void:
+	hud.gorunum_ayarla(cfg.ust_yazilar, cfg.durum_panelleri)
+	ForceArrow.deger_goster = cfg.ok_degerleri
+	if cfg.cetveller != _cetvel_acik:
+		_cetvel_acik = cfg.cetveller
+		for n in _cetveller:
+			n.visible = _cetvel_acik
 
 
 func _on_start() -> void:
@@ -380,6 +421,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 func _process(dt: float) -> void:
+	_gorunum_uygula()
 	if _launch_slow and running:
 		# gercek zaman: Engine.time_scale (agir cekim) bu sureyi uzatmasin
 		_launch_elapsed += dt / maxf(Engine.time_scale, 1e-6)
@@ -391,7 +433,10 @@ func _process(dt: float) -> void:
 		drag_arrow.set_force((p - drag_origin) * TOOL_N_PER_M, cfg.ok_olcegi)
 	if phase == Phase.RESOLVED and running and not _kosu_bitti:
 		_kosu_sure += dt / maxf(Engine.time_scale, 1e-6)   # gercek zaman
-		if _kosu_sure >= cfg.kosu_sonu_bekleme and not _bcam.is_active() and not _launch_slow:
+		# Sure dolunca HER DURUMDA biter (eskiden (b)'de kamera takibi ve
+		# firlatma agir cekimi de beklenirdi; takip ~6 sn surdugu icin
+		# Inspector'daki sure gecerli olmuyordu).
+		if _kosu_sure >= cfg.kosu_sonu_bekleme:
 			_kosu_sonu()
 	# Panel sayilari ekran karesi hizinda yeterli (fizik 120 Hz olabiliyor)
 	if perf.panel_okumalari:
@@ -425,6 +470,16 @@ func _physics_process_engine(delta: float) -> void:
 		_pre_step(delta)
 		_after_step(delta)
 	Engine.time_scale = user_speed * _slowmo()
+	# Secimden sonraki temaslar ekranda normal hizda gecsin ama fizik adimi
+	# agir cekimdeki kadar kucuk kalsin (8 ms'lik temas tek 8 ms'lik adimda
+	# cozulurse sekme bozulur): zamani yavaslatmak yerine saniyedeki adim
+	# sayisi 1/agir_cekim_carpani kat artar — ayni adim, daha cok adim.
+	var tik: int = cfg.godot_tik_sayisi
+	if advancing and _temas_yakin(TEMAS_HIZ_ESIGI, true) and not _temas_agir_cekimi():
+		tik = mini(roundi(cfg.godot_tik_sayisi / cfg.agir_cekim_carpani), 9600)
+	if Engine.physics_ticks_per_second != tik:
+		Engine.physics_ticks_per_second = tik
+		Engine.max_physics_steps_per_frame = maxi(_varsayilan_max_adim, ceili(tik / 30.0))
 	backend.set_running(running and phase != Phase.CHOICE)
 
 
@@ -449,15 +504,41 @@ func _pre_step(step: float) -> void:
 
 
 ## Temas ani milisaniyeler surer. Oklarin gorunebilmesi icin top zemine
-## yaklasirken zaman otomatik yavaslar.
+## yaklasirken zaman otomatik yavaslar — yalnizca ilk carpmada (secim ani);
+## secimden sonrakilerde Sim2Config → secimden_sonra_agir_cekim acikken.
 func _slowmo() -> float:
 	var f := 1.0
+	if _temas_agir_cekimi() and _temas_yakin(AGIR_CEKIM_HIZ_ESIGI):
+		f = cfg.agir_cekim_carpani
+	if _launch_slow:
+		f = minf(f, cfg.firlatma_agir_cekim_carpani)
+	return f
+
+
+## Agir cekim yalnizca gercek sekmelerde (yerde titreyen top zamani sonsuza
+## kadar yavaslatmasin). Kucuk adim (tik artisi) ise gorunmez: kucuk sekmeler
+## ve yerde duran top da yakalanir — bkz. _temas_yakin.
+const AGIR_CEKIM_HIZ_ESIGI := 0.6   # m/s
+const TEMAS_HIZ_ESIGI := 0.05       # m/s
+
+
+func _temas_agir_cekimi() -> bool:
+	return phase != Phase.RESOLVED or cfg.secimden_sonra_agir_cekim
+
+
+## Toplardan biri zemine yaklasiyor ya da zemine bastiriyor mu. yerde: zemine
+## degen top (hizi ne olursa olsun) da sayilsin — yay-sonumleyici temas 8 ms'lik
+## tek adimda kararsiz, yerde duran top bile titreyip ziplardi.
+func _temas_yakin(esik: float, yerde: bool = false) -> bool:
 	for side in ["left", "right"]:
 		var s := backend.get_state(side)
 		if s == null:
 			continue
 		var gap: float = s.position.y - cfg.radius - GROUND_Y
-		var fast := absf(s.velocity.y) > 0.6
+		# Esik dusuk: kucuk sekmeler (< 0.6 m/s) eskiden yakalanmiyordu, temas
+		# tek 8 ms'lik adimda cozuluyor ve top enerji kazaniyordu (0.02 m'lik
+		# sekme bir sonrakinde 2.3 m).
+		var fast := absf(s.velocity.y) > esik
 		# Temasin dip noktasinda hiz ~0 oldugu icin "fast" bir an duser ve
 		# o kare normal hizda (tek buyuk adim) gecer: Godot Melez'de temas
 		# bozulur, diger motorlarda agir cekim bir kare titrer. Temas kuvveti
@@ -465,11 +546,13 @@ func _slowmo() -> float:
 		# N ~ m·g oldugu icin orada normal hiza doner).
 		var pressing: bool = s.touching_ground \
 				and s.f_contact.y > 3.0 * s.mass * PhysicsBackend.GRAVITY.length()
-		if (s.touching_ground and (fast or pressing)) or (gap < 0.30 and s.velocity.y < -0.6):
-			f = cfg.agir_cekim_carpani
-	if _launch_slow:
-		f = minf(f, cfg.firlatma_agir_cekim_carpani)
-	return f
+		# (zemine 1 cm'den yakin; yalniz zeminle carpisan top — sagdaki topun
+		# temasi cozulmuyor, (c)'de yerde tutulurken boşuna hızlanmasın)
+		if yerde and gap < 0.01 and backend.get_spec(side).collisions_enabled:
+			return true
+		if (s.touching_ground and (fast or pressing)) or (gap < 0.30 and s.velocity.y < -esik):
+			return true
+	return false
 
 
 func _after_step(step: float) -> void:
@@ -526,7 +609,7 @@ func _after_step(step: float) -> void:
 			if _davranis == "b" and (_b_mode == Sim2Config.BGosterim.KAMERA_TAKIP \
 					or _b_mode == Sim2Config.BGosterim.IKISI):
 				# Top TUTULMAZ, ucmaya devam eder; kamera onu tepeye kadar izler.
-				_bcam.start_follow(balls["right"], perf.b_cetveli)
+				_bcam.start_follow(balls["right"], perf.b_cetveli and cfg.cetveller)
 				_left_frozen = true
 				_left_freeze_pos = sl.position
 				_left_freeze_vel = sl.velocity
@@ -658,9 +741,12 @@ func _apply_choice_force(sr: PhysicsBackend.BodyState) -> void:
 			impulse_left = 0.0
 
 
-## Geri bildirim metni config/secenekler.json'dan ("geri_bildirim").
+## Geri bildirim metni config/secenekler.tres'ten ("geri_bildirim").
+## Sim2Config → Görünüm → geri_bildirim kapaliyken hic gosterilmez.
 ## Referanssiz modda yalnizca "referanssiz_geri_bildirim": true ise gosterilir.
 func _show_feedback() -> void:
+	if not cfg.geri_bildirim:
+		return
 	if Ayarlar.referanssiz() and not bool(Ayarlar.veri.get("referanssiz_geri_bildirim", false)):
 		return
 	var carpan := ("%d" % cfg.b_carpani) if is_equal_approx(cfg.b_carpani, roundf(cfg.b_carpani)) else ("%.1f" % cfg.b_carpani)
@@ -675,6 +761,12 @@ func _show_feedback() -> void:
 ## Kosu bitti: rekor (Sim2Config → en_yuksek_gosterimi) ve son soru.
 func _kosu_sonu() -> void:
 	_kosu_bitti = true
+	# (b) kamera takibi / firlatma agir cekimi hala suruyorsa kes: kamera ana
+	# poza doner, bekletilen sol top kaldigi yerden devam eder.
+	_launch_slow = false
+	if _bcam.is_active():
+		_bcam.reset()
+		_unfreeze_left()
 	if cfg.en_yuksek_gosterimi == Sim2Config.EnYuksek.SON_REKOR and _en_yuksek > 0.05:
 		_bcam.rekor_goster(_en_yuksek)
 	var sec := Ayarlar.secenek(choice)

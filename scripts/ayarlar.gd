@@ -5,7 +5,8 @@ extends Node
 ##   - yazı ölçeği ve arayüz ölçeği (user://arayuz.cfg'ye kaydedilir)
 ##   - referanssız mod (doğru simülasyon gizli) — "student_build" özellik
 ##     etiketiyle dışa aktarılan sürümde ZORLA açık, ayar düğmesi gizli
-##   - seçenek metinleri / son sorular / geri bildirimler (config/secenekler.json)
+##   - seçenek metinleri / son sorular / geri bildirimler (config/secenekler.tres,
+##     Inspector'dan düzenlenir)
 ##   - öğrenci cevaplarının kaydı (user://cevaplar.csv)
 ##
 ## ÖĞRENCİ SÜRÜMÜ: Proje → Dışa Aktar → ön ayarı seç → Features → Custom
@@ -15,7 +16,7 @@ signal degisti
 
 const DOSYA := "user://arayuz.cfg"
 const OGRENCI_OZELLIGI := "student_build"
-const SECENEK_DOSYASI := "res://config/secenekler.json"
+const SECENEK_DOSYASI := "res://config/secenekler.tres"
 const CEVAP_DOSYASI := "user://cevaplar.csv"
 ## Yazı boyutu adımları (Ayarlar → Yazı boyutu, A− / A+)
 const YAZI_ADIMLARI := [0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5]
@@ -25,7 +26,7 @@ const ARAYUZ_ADIMLARI := [0.8, 0.9, 1.0, 1.1, 1.25, 1.4, 1.6]
 var yazi_olcek := 1.0
 var arayuz_olcek := 1.0
 var _referanssiz := false
-## config/secenekler.json içeriği (bkz. secenek_listesi()).
+## config/secenekler.tres içeriği, sözlük olarak (bkz. secenek_listesi()).
 var veri: Dictionary = {}
 
 
@@ -108,11 +109,21 @@ func _kaydet() -> void:
 # ------------------------------------------------------- seçenek verisi
 
 func _veri_oku() -> Dictionary:
-	var metin := FileAccess.get_file_as_string(SECENEK_DOSYASI)
-	var d = JSON.parse_string(metin) if metin != "" else null
-	if not (d is Dictionary) or not (d.get("secenekler") is Array):
-		push_error("%s okunamadı ya da bozuk (JSON sözdizimini kontrol et)." % SECENEK_DOSYASI)
+	var r := load(SECENEK_DOSYASI) as SecenekAyarlari
+	if r == null:
+		push_error("%s okunamadı." % SECENEK_DOSYASI)
 		return {"secenekler": []}
+	var d := {}
+	for k in ["secim_basligi", "secim_ipucu", "secim_ipucu_referanssiz", "soru_basligi",
+			"soru_metin_girisi", "referanssiz_geri_bildirim"]:
+		d[k] = r.get(k)
+	var liste := []
+	for s in r.secenekler:
+		if s == null:
+			continue
+		liste.append({"id": s.id, "harf": s.harf, "metin": s.metin, "davranis": s.davranis,
+			"oklari_gizle": s.oklari_gizle, "son_soru": s.son_soru, "geri_bildirim": s.geri_bildirim})
+	d["secenekler"] = liste
 	return d
 
 

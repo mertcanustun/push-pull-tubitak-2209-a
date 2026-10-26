@@ -1,0 +1,49 @@
+[gd_resource type="Resource" script_class="SecenekVerisi" load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://scripts/secenek_verisi.gd" id="1_verisi"]
+[ext_resource type="Script" path="res://scripts/secenek.gd" id="2_secenek"]
+
+[sub_resource type="Resource" id="Resource_a"]
+script = ExtResource("2_secenek")
+id = "a"
+harf = "a)"
+metin = "Top ve Zemin birbirine aynı büyüklükte kuvvet uygular"
+davranis = "a"
+oklari_gizle = false
+son_soru = ""
+
+[sub_resource type="Resource" id="Resource_b"]
+script = ExtResource("2_secenek")
+id = "b"
+harf = "b)"
+metin = "Top daha küçük olduğu için Zemin topun ona uyguladığından daha büyük bir kuvvet uygular"
+davranis = "b"
+oklari_gizle = false
+son_soru = "Sence top neden fırladı? Topun zemine uyguladığı kuvvetin büyüklüğü ne kadar olabilir?"
+
+[sub_resource type="Resource" id="Resource_c"]
+script = ExtResource("2_secenek")
+id = "c"
+harf = "c)"
+metin = "Topa hem etki hem de tepki kuvvetleri etki eder."
+davranis = "c"
+oklari_gizle = false
+son_soru = "Sence topun hareketsiz kalmasındaki sebep nedir? Hangi kuvvetin harekete sebep olmasını bekliyordun?"
+
+[sub_resource type="Resource" id="Resource_d"]
+script = ExtResource("2_secenek")
+id = "d"
+harf = "d)"
+metin = "Toptaki etki kuvveti zemine tepki olarak geçer"
+davranis = "c"
+oklari_gizle = true
+son_soru = "Sence top neden hareket etmiyor? Topun üzerinde hangi kuvvetin harekete sebep olmasını bekliyordun?"
+
+[resource]
+script = ExtResource("1_verisi")
+secim_basligi = "Top tam zemine değdi. Zemin topa hangi kuvveti uygular?"
+secim_ipucu = "Sol taraf gerçek fiziği gösteriyor. Sağdaki top için sen karar ver."
+secim_ipucu_referanssiz = "Sağdaki top için sen karar ver."
+soru_basligi = "Soru"
+soru_metin_girisi = true
+secenekler = Array[ExtResource("2_secenek")]([SubResource("Resource_a"), SubResource("Resource_b"), SubResource("Resource_c"), SubResource("Resource_d")])

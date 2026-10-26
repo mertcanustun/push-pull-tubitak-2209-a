@@ -94,7 +94,8 @@ enum EnYuksek { CANLI, SON_REKOR, GIZLI }
 ## sığsın diye. Oklar ekrandan taşıyorsa küçült.
 @export_range(0.05, 2.0, 0.01) var ok_olcegi: float = 0.36
 ## Top zemine yaklaşırken/temas ederken zaman ne kadar yavaşlasın
-## (0.05 = 20 kat yavaş).
+## (0.05 = 20 kat yavaş). Yalnızca seçimden ÖNCEKİ ilk düşüşte görünür;
+## sonraki temaslar normal hızda akar (fizik adımı yine bu kadar küçük).
 @export_range(0.001, 1.0, 0.001) var agir_cekim_carpani: float = 0.05
 ## (b)'de top bu yüksekliği geçince "ekrandan çıktı" sayılır ve tepe noktası
 ## yazısı çıkar.
@@ -105,13 +106,13 @@ enum EnYuksek { CANLI, SON_REKOR, GIZLI }
 ##   CANLI     - eski davranış: (b) takibinde canlı sayaç + tepe noktası yazısı
 ##   SON_REKOR - koşu sırasında gizli, koşu BİTİNCE "En yüksek: X m" rekoru
 ##               (Sıfırla'ya kadar ekranda kalır)
-##   GIZLI     - hiç gösterilmez
+##   GIZLI     - hiç gösterilmez (varsayılan)
 ## Anında işler.
-@export var en_yuksek_gosterimi: EnYuksek = EnYuksek.SON_REKOR
+@export var en_yuksek_gosterimi: EnYuksek = EnYuksek.GIZLI
 ## Seçimden sonra koşunun "bitti" sayılması için geçen süre (gerçek saniye,
-## duraklatma sayılmaz). (b)'de ayrıca kamera takibinin bitmesi beklenir.
-## Koşu bitince rekor (yukarıda) ve seçeneğin son sorusu
-## (config/secenekler.json) gösterilir.
+## duraklatma sayılmaz). Süre dolunca HER DURUMDA biter — (b)'de kamera
+## takibi sürüyor olsa bile. Koşu bitince rekor (yukarıda) ve seçeneğin son
+## sorusu (config/secenekler.tres) gösterilir.
 @export_range(0.5, 30.0, 0.5, "suffix:sn") var kosu_sonu_bekleme: float = 4.0
 
 @export_group("(b) gösterimi")
@@ -123,7 +124,8 @@ enum EnYuksek { CANLI, SON_REKOR, GIZLI }
 ##                 kısa bekler, sonra ana kamera pozuna geri döner
 ##   IKISI: önce fırlatma ağır çekimde, sonra kamera takibi
 ##   HICBIRI: eski davranış (top 9 m'de durdurulur, yalnızca yazı)
-@export var b_gosterim: BGosterim = BGosterim.IKISI
+## Varsayılan KAMERA_TAKIP: seçimden sonra ağır çekim yok.
+@export var b_gosterim: BGosterim = BGosterim.KAMERA_TAKIP
 ## Fırlatma ağır çekim çarpanı (0.01 → ilk 9 m yaklaşık 1 saniyede izlenir).
 @export_range(0.001, 1.0, 0.001) var firlatma_agir_cekim_carpani: float = 0.01
 ## Fırlatma ağır çekiminin üst sınırı (gerçek saniye). Normalde top ekrandan

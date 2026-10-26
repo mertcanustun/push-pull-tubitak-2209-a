@@ -23,6 +23,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 Ayarlar="*res://scripts/ayarlar.gd"
+Kayit="*res://scripts/kayit.gd"
 
 [display]
 

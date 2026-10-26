@@ -70,7 +70,7 @@ const ARROW_DEFS := [
 	["drag", "Hava sürtünmesi  Fs", Color(0.42, 0.72, 1.00), true],
 	["contact", "Zemin tepkisi  N", Color(0.40, 0.90, 0.55), true],
 	["external", "Uygulanan kuvvet  F", Color(0.85, 0.55, 1.00), true],
-	["net", "Net kuvvet  Fnet", Color(1.00, 0.85, 0.25), true],
+	["net", "Net kuvvet  Fnet", Color(1.00, 0.85, 0.25), false],
 	["net_minus_g", "Fnet − Fg", Color(1.00, 0.55, 0.15), false],
 ]
 
@@ -426,6 +426,8 @@ func _build_title() -> void:
 	_status = _sarmali(_label("Başlatmak için SPACE ya da Başlat", 17, MUTED))
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_status)
+	# Ust baslik ve durum yazisi gosterilmiyor (set_status yine calisir).
+	box.visible = false
 
 
 func _side_panel(i: int, title: String, subtitle: String, color: Color) -> Dictionary:
@@ -500,6 +502,8 @@ func _build_side_panels() -> void:
 	for i in 2:
 		_yan[i]["panel"].size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		_aciklama_goster(i, true)
+	# Sol/sag top durum panelleri gosterilmiyor.
+	_yan_satir.visible = false
 
 
 func _build_controls() -> void:
@@ -727,7 +731,7 @@ func _build_choice_panel() -> void:
 	_secim_ipucu = _sarmali(_label(Ayarlar.metin("secim_ipucu"), 16, MUTED))
 	_secim_icerik.add_child(_secim_ipucu)
 
-	# Secenekler config/secenekler.json'dan (Ayarlar.secenek_listesi); kac
+	# Secenekler config/secenekler.tres'ten (Ayarlar.secenek_listesi); kac
 	# tane olursa olsun alt alta, kaydirilabilir alanda.
 	for opt in Ayarlar.secenek_listesi():
 		var b := Button.new()
@@ -975,12 +979,16 @@ func _sinirla(w: float, h: float) -> void:
 
 
 func _sahne_payini_bildir(w: float, h: float, yan_w: float) -> void:
-	var ust := (_baslik_kutu.get_global_rect().end.y + 4.0) / h
-	var serbest := _baslik_kutu.get_global_rect().end.y
+	var serbest := _baslik_kutu.get_global_rect().end.y if _baslik_kutu.visible else KENAR
+	var ust := (serbest + 4.0) / h if _baslik_kutu.visible else 0.0
 	if _feedback_panel.visible and _geri_ustte:
 		serbest = maxf(serbest, _feedback_panel.get_global_rect().end.y)
 	ust_serbest_degisti.emit(serbest + 8.0)
-	if _mod == Mod.DIKEY:
+	if not _yan_satir.visible:
+		# yalniz alttaki kontrol cubugu kalir; dikeyde tam genislik
+		var alt0 := (h - _alt.get_global_rect().position.y + 4.0) / h if _mod == Mod.DIKEY else 0.0
+		sahne_payi_degisti.emit(0.0, 0.0, ust, alt0)
+	elif _mod == Mod.DIKEY:
 		var alt := (h - _yan_satir.get_global_rect().position.y + 4.0) / h
 		sahne_payi_degisti.emit(KENAR / w, KENAR / w, ust, alt)
 	else:

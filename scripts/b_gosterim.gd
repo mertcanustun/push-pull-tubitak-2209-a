@@ -64,6 +64,14 @@ func etiket_ust_ayarla(y: float) -> void:
 		_label.offset_top = y
 
 
+## Ana kamera pozu degisti (referanssiz modda kamera tek topu ortalar).
+## Takip/donus surerken kamerayi kendisi yonettigi icin yalnizca BOS'ta oturtur.
+func taban_ayarla(t: Transform3D) -> void:
+	_base = t
+	if durum == Durum.BOS and _cam:
+		_cam.global_transform = t
+
+
 func is_following() -> bool:
 	return durum == Durum.TAKIP
 
@@ -126,7 +134,7 @@ func _process(delta: float) -> void:
 			var h := _ball.global_position.y
 			var target := _base
 			var rise: float = clampf(h - _base.origin.y - KADRAJ_PAYI, 0.0, _cfg.kamera_takip_max_yukseklik)
-			target.origin += Vector3(_ball.global_position.x * 0.9, rise, 0.0)
+			target.origin += Vector3((_ball.global_position.x - _base.origin.x) * 0.9, rise, 0.0)
 			var w := clampf(_t / BASLANGIC_GECISI, 0.0, 1.0)
 			_cam.global_transform = _base.interpolate_with(target, w)
 			_max_cam_y = maxf(_max_cam_y, _cam.global_position.y)

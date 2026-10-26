@@ -919,12 +919,14 @@ cast_shadow = 0
 mesh = SubResource("BoxMesh_choun")
 
 [node name="RulerLeft_Tick1" type="MeshInstance3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.84, 1, 0)
 material_override = SubResource("StandardMaterial3D_ya4ey")
 cast_shadow = 0
 mesh = SubResource("BoxMesh_eb6dy")
 
 [node name="RulerLeft_Label1" type="Label3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, 1.13, 0)
 pixel_size = 0.0028
 billboard = 1
@@ -933,12 +935,14 @@ text = "1 m"
 font_size = 40
 
 [node name="RulerLeft_Tick2" type="MeshInstance3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.84, 2, 0)
 material_override = SubResource("StandardMaterial3D_trceg")
 cast_shadow = 0
 mesh = SubResource("BoxMesh_a8y0u")
 
 [node name="RulerLeft_Label2" type="Label3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, 2.13, 0)
 pixel_size = 0.0028
 billboard = 1
@@ -947,12 +951,14 @@ text = "2 m"
 font_size = 40
 
 [node name="RulerLeft_Tick3" type="MeshInstance3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.84, 3, 0)
 material_override = SubResource("StandardMaterial3D_jkv2x")
 cast_shadow = 0
 mesh = SubResource("BoxMesh_jbj1t")
 
 [node name="RulerLeft_Label3" type="Label3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, -0.78, 3.13, 0)
 pixel_size = 0.0028
 billboard = 1
@@ -961,12 +967,14 @@ text = "3 m"
 font_size = 40
 
 [node name="RulerRight_Tick1" type="MeshInstance3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.84, 1, 0)
 material_override = SubResource("StandardMaterial3D_muem4")
 cast_shadow = 0
 mesh = SubResource("BoxMesh_dp3eg")
 
 [node name="RulerRight_Label1" type="Label3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, 1.13, 0)
 pixel_size = 0.0028
 billboard = 1
@@ -975,12 +983,14 @@ text = "1 m"
 font_size = 40
 
 [node name="RulerRight_Tick2" type="MeshInstance3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.84, 2, 0)
 material_override = SubResource("StandardMaterial3D_0ld40")
 cast_shadow = 0
 mesh = SubResource("BoxMesh_gqmmt")
 
 [node name="RulerRight_Label2" type="Label3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, 2.13, 0)
 pixel_size = 0.0028
 billboard = 1
@@ -989,12 +999,14 @@ text = "2 m"
 font_size = 40
 
 [node name="RulerRight_Tick3" type="MeshInstance3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.84, 3, 0)
 material_override = SubResource("StandardMaterial3D_yc10j")
 cast_shadow = 0
 mesh = SubResource("BoxMesh_jscy8")
 
 [node name="RulerRight_Label3" type="Label3D" parent="."]
+visible = false
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0.78, 3.13, 0)
 pixel_size = 0.0028
 billboard = 1

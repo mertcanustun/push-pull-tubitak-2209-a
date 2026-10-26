@@ -7,7 +7,7 @@ extends Node3D
 ##   SAG  - Yercekimi ve hava surtunmesi isler, CARPISMA cozulmez.
 ##          Top zemine degdigi an sim durur, ogrenci zemin tepkisini secer.
 ##
-## Secenekler (metinler, son sorular, geri bildirimler: config/secenekler.json).
+## Secenekler (metinler, son sorular: config/secenekler.tres, Inspector'dan).
 ## Her secenegin bir "davranis"i var — sagdaki topun ne yapacagi:
 ##   a) yukari F            -> sol tarafla birebir ayni gorsel (dogru)
 ##   b) yukari 100·F        -> top firlar (zemin "daha buyuk" kuvvet uygular yanilgisi)
@@ -15,11 +15,14 @@ extends Node3D
 ##   d) davranis c, ama "oklari_gizle": top durur, ustunde HIC kuvvet oku yok
 ##      ("kuvvet zemine tepki olarak gecer" yanilgisi)
 ##
-## Referanssiz mod (Ayarlar autoload'u): sol top ve paneli gizlenir; sol
-## fizik yine de calisir (a secenegi kuvvetini ondan aliyor).
+## Referanssiz mod (Ayarlar autoload'u): sol top gizlenir, kamera sagdaki
+## topu ortalar; sol fizik yine de calisir (a secenegi kuvvetini ondan aliyor).
 ##
-## Kosu sonu: secimden cfg.kosu_sonu_bekleme saniye sonra (b'de kamera
-## takibi de bitince) "En yuksek" rekoru ve secenegin son sorusu gosterilir.
+## Agir cekim yalnizca SECIMDEN ONCEKI ilk temasta gorunur. Secimden sonra
+## temaslar normal hizda akar (fizik adimi yine kucuk: bkz. _alt_bolme).
+##
+## Kosu sonu: secimden cfg.kosu_sonu_bekleme saniye sonra (kamera takibi
+## surse bile) secenegin son sorusu gosterilir.
 
 ## Kütle/yarıçap/sekme/hava/temas/b-çarpanı/ok-ölçeği/ağır-çekim/ekrandan-çıkış
 ## artık burada SABİT DEĞİL — res://config/sim2_config.tres içinde (kod
@@ -29,6 +32,9 @@ extends Node3D
 ## Tüm simülasyon ayarları (config/sim2_config.tres). Oyun çalışırken Remote
 ## sekmesinde buradan canlı değiştirilebilir.
 @export var cfg: Sim2Config = preload("res://config/sim2_config.tres")
+## Seçim ekranı başlığı, şıklar ve koşu sonu soruları (config/secenekler.tres).
+## Bir sonraki çalıştırmada işler.
+@export var secenekler: SecenekVerisi = preload("res://config/secenekler.tres")
 
 const DROP_HEIGHT := 3.0
 const HALF_X := 1.8
@@ -89,7 +95,7 @@ var left_enter_speed := 0.0
 
 var arrow_on := {
 	"gravity": true, "drag": true, "contact": true,
-	"external": true, "net": true, "net_minus_g": false,
+	"external": true, "net": false, "net_minus_g": false,
 }
 
 var balls := {}          # "left"/"right" -> Ball (sahnedeki TopSol / TopSag)
@@ -130,6 +136,7 @@ func _ready() -> void:
 	drag_arrow = ForceArrow.new(Color(1.0, 1.0, 1.0), "surukle")
 	add_child(drag_arrow)
 	perf = $Performans
+	Ayarlar.secenekleri_yukle(secenekler)   # HUD secim dugmelerini bundan kurar
 	_build_hud()
 	hud.gelistirici_kur(perf)
 	_build_balls()     # önce toplar: Godot Melez motoru bu node'ları kullanıyor
@@ -162,6 +169,7 @@ func _on_cfg_changed() -> void:
 ##     bozmadan (lens kaydirma = FRUSTUM ofseti) oraya kaydirilir.
 ## Genis ekranda (paneller kenarda kaldiginda) eski kadraj aynen korunur.
 const KUTU_X := HALF_X + 0.3          # top + sola/saga tasan ok etiketleri
+const KUTU_X_TEK := 1.0               # tek top (referanssiz): top + oklari
 const KUTU_ALT := GROUND_Y - 0.5      # zemindeki topun altina inen oklar
 const KUTU_UST := DROP_HEIGHT + 0.35
 var _fov_16_9 := 54.0
@@ -185,10 +193,20 @@ func _kamerayi_uydur() -> void:
 	if b_ust - b_alt < 0.4:
 		b_ust = 1.0
 		b_alt = -1.0
-	var ters := _kamera_taban.affine_inverse()
+	# Referanssiz modda ekranda tek top var: kamera onu ortalar (yalnizca
+	# yatay kaydirma; aci ve yukseklik ayni).
+	var tek := Ayarlar.referanssiz()
+	var cx := HALF_X if tek else 0.0
+	var yari := KUTU_X_TEK if tek else KUTU_X
+	var taban := _kamera_taban.translated(Vector3(cx, 0.0, 0.0))
+	if _bcam:
+		_bcam.taban_ayarla(taban)
+	else:
+		camera.global_transform = taban
+	var ters := taban.affine_inverse()
 	var umin := INF
 	var umax := -INF
-	for x in [-KUTU_X, KUTU_X]:
+	for x in [cx - yari, cx + yari]:
 		for y in [KUTU_ALT, KUTU_UST]:
 			var p: Vector3 = ters * Vector3(x, y, 0.0)
 			var d := -p.z
@@ -241,6 +259,7 @@ func _build_hud() -> void:
 func _build_backend() -> void:
 	if backend:
 		backend.shutdown()   # onceki motorun global ayarlarini (time_scale vb.) geri al
+	Engine.max_physics_steps_per_frame = 8   # _physics_process_engine artirmis olabilir
 	match cfg.backend:
 		Sim2Config.Backend.YEDEK_COZUCU:
 			backend = NativeBackend.new()
@@ -343,7 +362,6 @@ func reset_sim() -> void:
 	hud.set_start_text("Başlat")
 	hud.set_status("Fizik motoru: %s   -   SPACE / Başlat" % backend.backend_name())
 	_sync_visuals()
-	_update_readouts()
 
 
 ## Referanssiz mod (Ayarlar autoload'u): sol top, oklari ve paneli gizli.
@@ -351,6 +369,7 @@ func _referans_uygula() -> void:
 	var goster := not Ayarlar.referanssiz()
 	(balls["left"] as Ball).visible = goster
 	hud.referans_goster(goster)
+	_kamerayi_uydur()
 
 
 func _on_start() -> void:
@@ -391,21 +410,24 @@ func _process(dt: float) -> void:
 		drag_arrow.set_force((p - drag_origin) * TOOL_N_PER_M, cfg.ok_olcegi)
 	if phase == Phase.RESOLVED and running and not _kosu_bitti:
 		_kosu_sure += dt / maxf(Engine.time_scale, 1e-6)   # gercek zaman
-		if _kosu_sure >= cfg.kosu_sonu_bekleme and not _bcam.is_active() and not _launch_slow:
+		# Sure dolunca HER DURUMDA biter (kamera takibi / firlatma agir
+		# cekimi surse bile).
+		if _kosu_sure >= cfg.kosu_sonu_bekleme:
 			_kosu_sonu()
-	# Panel sayilari ekran karesi hizinda yeterli (fizik 120 Hz olabiliyor)
-	if perf.panel_okumalari:
-		_update_readouts()
 
 
 func _physics_process(delta: float) -> void:
 	if backend.engine_driven():
 		_physics_process_engine(delta)
 	elif running and phase != Phase.CHOICE:
-		var step := delta * user_speed * _slowmo()
-		_pre_step(step)
-		backend.step(step)
-		_after_step(step)
+		# Gorunen zaman _gorunen_hiz() kadar akar; temasta adim yine
+		# _slowmo() kadar kucuk olsun diye kare alt adimlara bolunur.
+		var n := _alt_bolme()
+		var step := delta * user_speed * _gorunen_hiz() / float(n)
+		for i in n:
+			_pre_step(step)
+			backend.step(step)
+			_after_step(step)
 	_sync_visuals()
 
 
@@ -415,6 +437,9 @@ func _physics_process(delta: float) -> void:
 ## (ve kullanici hiz kaydiricisi) Engine.time_scale'e yazilir; Godot bunu
 ## bir sonraki karede uygular. Secim ekraninda / duraklatilinca bile
 ## yazmaya devam ediyoruz ki devam edilince ilk adim hizli olmasin.
+##
+## Secimden sonra zaman yavaslamaz: ayni kucuk adim, saniyedeki tik sayisi
+## _alt_bolme() kat artirilarak elde edilir (fizik birebir ayni kalir).
 func _physics_process_engine(delta: float) -> void:
 	var advancing := running and phase != Phase.CHOICE
 	if advancing:
@@ -424,8 +449,29 @@ func _physics_process_engine(delta: float) -> void:
 		backend.step(delta)
 		_pre_step(delta)
 		_after_step(delta)
-	Engine.time_scale = user_speed * _slowmo()
+	var n := _alt_bolme()
+	Engine.time_scale = user_speed * _gorunen_hiz()
+	Engine.physics_ticks_per_second = cfg.godot_tik_sayisi * n
+	Engine.max_physics_steps_per_frame = maxi(8, ceili(cfg.godot_tik_sayisi * n / 50.0))
 	backend.set_running(running and phase != Phase.CHOICE)
+
+
+## Ekranda zamanin akis hizi (kullanici hiz kaydiricisi haric). Temas agir
+## cekimi yalnizca secimden once (ilk dusus): soru ciktiktan sonra temaslar
+## normal hizda gorunur. Firlatma agir cekimi (cfg "(b) gösterimi") ayri.
+func _gorunen_hiz() -> float:
+	var f := _slowmo() if phase == Phase.FALLING else 1.0
+	if _launch_slow:
+		f = minf(f, cfg.firlatma_agir_cekim_carpani)
+	return f
+
+
+## Temas cozumu icin gereken adim, gorunen hizdan kac kat kucuk olmali.
+func _alt_bolme() -> int:
+	var gerekli := _slowmo()
+	if _launch_slow:
+		gerekli = minf(gerekli, cfg.firlatma_agir_cekim_carpani)
+	return maxi(1, ceili(_gorunen_hiz() / gerekli - 1e-6))
 
 
 ## Bu karede verilecek kuvveti ayarla. Son (kismi) adimda kuvvet
@@ -448,8 +494,9 @@ func _pre_step(step: float) -> void:
 		backend.set_external_force("right", Vector3(0.0, _applied_f, 0.0))
 
 
-## Temas ani milisaniyeler surer. Oklarin gorunebilmesi icin top zemine
-## yaklasirken zaman otomatik yavaslar.
+## Temas ani milisaniyeler surer. Top zemine yaklasirken/temas ederken fizik
+## adimi bu carpan kadar kuculur. Secimden once bu ayni zamanda gorunen
+## agir cekimdir (oklar gorunsun); sonrasi icin bkz. _gorunen_hiz().
 func _slowmo() -> float:
 	var f := 1.0
 	for side in ["left", "right"]:
@@ -467,8 +514,6 @@ func _slowmo() -> float:
 				and s.f_contact.y > 3.0 * s.mass * PhysicsBackend.GRAVITY.length()
 		if (s.touching_ground and (fast or pressing)) or (gap < 0.30 and s.velocity.y < -0.6):
 			f = cfg.agir_cekim_carpani
-	if _launch_slow:
-		f = minf(f, cfg.firlatma_agir_cekim_carpani)
 	return f
 
 
@@ -610,10 +655,10 @@ func _on_choice(c: String) -> void:
 	_kosu_bitti = false
 	_en_yuksek = 0.0
 	hud.show_choice(false)
+	Kayit.olay("secim", {"secenek": c, "secenek_metni": str(sec.get("metin", ""))})
 	var sr := backend.get_state("right")
 	_apply_choice_force(sr)
 	(balls["right"] as Ball).play_impact(GROUND_Y, v_impact)
-	_show_feedback()
 	if _davranis == "b":
 		_b_mode = cfg.b_gosterim
 		# Firlatma agir cekimi SECIM ANINDA tetiklenir — _slowmo()'nun
@@ -658,20 +703,6 @@ func _apply_choice_force(sr: PhysicsBackend.BodyState) -> void:
 			impulse_left = 0.0
 
 
-## Geri bildirim metni config/secenekler.json'dan ("geri_bildirim").
-## Referanssiz modda yalnizca "referanssiz_geri_bildirim": true ise gosterilir.
-func _show_feedback() -> void:
-	if Ayarlar.referanssiz() and not bool(Ayarlar.veri.get("referanssiz_geri_bildirim", false)):
-		return
-	var carpan := ("%d" % cfg.b_carpani) if is_equal_approx(cfg.b_carpani, roundf(cfg.b_carpani)) else ("%.1f" % cfg.b_carpani)
-	var txt := str(Ayarlar.secenek(choice).get("geri_bildirim", ""))
-	hud.show_feedback(txt.format({
-		"f": "%.0f" % f_real,
-		"fb": "%.0f" % (cfg.b_carpani * f_real),
-		"carpan": carpan,
-	}))
-
-
 ## Kosu bitti: rekor (Sim2Config → en_yuksek_gosterimi) ve son soru.
 func _kosu_sonu() -> void:
 	_kosu_bitti = true
@@ -686,10 +717,15 @@ func _kosu_sonu() -> void:
 
 
 func _on_soru_kapandi(cevap: String, kaydet: bool) -> void:
-	if not kaydet:
-		return
 	var sec := Ayarlar.secenek(choice)
-	Ayarlar.cevap_kaydet(choice, str(sec.get("metin", "")), str(sec.get("son_soru", "")), cevap)
+	var alanlar := {"secenek": choice, "secenek_metni": str(sec.get("metin", "")),
+		"soru": str(sec.get("son_soru", ""))}
+	if not kaydet:
+		Kayit.olay("cevap_gecildi", alanlar)
+		return
+	alanlar["cevap"] = cevap
+	Kayit.olay("cevap", alanlar)
+	Ayarlar.cevap_kaydet(choice, alanlar["secenek_metni"], alanlar["soru"], cevap)
 	hud.set_status("Cevabın kaydedildi.")
 
 
@@ -697,9 +733,8 @@ func _on_soru_kapandi(cevap: String, kaydet: bool) -> void:
 
 ## Ekranda gosterilecek kuvvetler.
 ##
-## TEK KAYNAK: hem oklar hem sag/sol paneller bunu kullanir. Daha once
-## override yalnizca oklarda vardi, panel ham backend degerini okuyordu -
-## ayni top icin ok "N 1002 N", panel "N 0 N" diyordu.
+## Sabitlenen topta ve (c) seceneginde ham backend degerleri yerine
+## ogretici gosterim kullanilir.
 func _display_forces(side: String, s: PhysicsBackend.BodyState) -> Dictionary:
 	var d := {
 		"gravity": s.f_gravity,
@@ -755,25 +790,6 @@ func _set_arrow(ball: Ball, key: String, force: Vector3, slot: int) -> void:
 		a.set_force(force, cfg.ok_olcegi)
 	else:
 		a.set_force(Vector3.ZERO, cfg.ok_olcegi)
-
-
-func _update_readouts() -> void:
-	for side in ["left", "right"]:
-		var s := backend.get_state(side)
-		if s == null:
-			continue
-		# Oklarla AYNI kaynak - iki yerde farkli sayi cikmasin.
-		var d := _display_forces(side, s)
-		var h: float = maxf(s.position.y - cfg.radius, 0.0)
-		var t := "[color=#c8cddb]Yükseklik[/color]  %.2f m\n" % h
-		t += "[color=#c8cddb]Hız[/color]  %.2f m/s\n" % s.velocity.y
-		t += "[color=#f05a5a]Fg[/color] %.1f N   " % (d["gravity"] as Vector3).length()
-		t += "[color=#6bb8ff]Fs[/color] %.2f N   " % (d["drag"] as Vector3).length()
-		t += "[color=#66e68c]N[/color] %.0f N\n" % (d["contact"] as Vector3).length()
-		t += "[color=#ffd83d]Fnet[/color] %.0f N" % (d["net"] as Vector3).length()
-		if side == "right" and (d["external"] as Vector3).length() > 0.01:
-			t += "   [color=#d98cff]F[/color] %.0f N" % (d["external"] as Vector3).length()
-		hud.set_readout(side, t)
 
 
 # ------------------------------------------------------------- ok araci

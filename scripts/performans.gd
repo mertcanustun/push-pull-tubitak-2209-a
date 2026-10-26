@@ -62,11 +62,8 @@ signal degisti
 ## Kuvvet okları (12 ok + 3B etiketler, her fizik adımında güncellenir).
 @export var kuvvet_oklari := true:
 	set(v): kuvvet_oklari = v; _degisti()
-## Sol/sağ paneldeki canlı sayılar (her karede yeniden yazılan zengin metin).
-@export var panel_okumalari := true:
-	set(v): panel_okumalari = v; _degisti()
 ## (b) kamera takibindeki yükseklik cetveli (çentikler + 3B etiketler).
-@export var b_cetveli := true:
+@export var b_cetveli := false:
 	set(v): b_cetveli = v; _degisti()
 ## Godot Melez: her sekmede konsola "temas bitti" satırı (web'de konsol yavaş).
 @export var temas_logu := true:
@@ -88,7 +85,6 @@ const ANAHTARLAR := [
 	["ssao", "SSAO (ek ışık)"],
 	["salon", "Salon modeli"],
 	["kuvvet_oklari", "Kuvvet okları"],
-	["panel_okumalari", "Panel sayıları"],
 	["b_cetveli", "(b) yükseklik cetveli"],
 	["temas_logu", "Temas konsol çıktısı"],
 ]

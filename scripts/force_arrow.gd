@@ -1,7 +1,7 @@
 extends Node3D
 class_name ForceArrow
 
-## Kuvvet vektoru oku. Govde (silindir) + uc (koni) + deger etiketi.
+## Kuvvet vektoru oku. Govde (silindir) + uc (koni) + ad etiketi.
 ## Govde/uc/etiket kodla uretilir; ok kendisi ister kodla (ForceArrow.new)
 ## ister sahnede gercek node olarak (bkz. scenes/ball.tscn "Oklar") durabilir.
 
@@ -11,7 +11,7 @@ const HEAD_LENGTH := 0.16
 const MIN_LENGTH := 0.10
 
 @export_group("Ok")
-## Okun yanındaki kısa ad (Fg, Fs, N, F, Fnet …). Değer kodla eklenir.
+## Okun yanındaki kısa ad (Fg, Fs, N, F, Fnet …).
 @export var label_text := ""
 var show_label := true
 ## Etiketler birbirinin uzerine binmesin diye her oka farkli bir kaldirma.
@@ -93,7 +93,7 @@ func _set_color(c: Color) -> void:
 ##
 ## Uzunluk logaritmiktir: bu sahnede yercekimi ~6 N iken temas kuvveti
 ## ~1000 N, (b) secenegi ise ~100.000 N. Dogrusal olcekte kucuk oklar
-## gorunmez olurdu. Gercek sayi her zaman etikette yazar.
+## gorunmez olurdu.
 func set_force(force: Vector3, k: float, logarithmic: bool = true) -> void:
 	_force = force
 	var magnitude := force.length()
@@ -125,12 +125,11 @@ func set_force(force: Vector3, k: float, logarithmic: bool = true) -> void:
 
 	if show_label:
 		_label.visible = true
-		var num := "%.1f" % magnitude if magnitude < 10.0 else "%.0f" % magnitude
-		var yazi := "%s %s N" % [label_text, num]
-		# Label3D her metin atamasında glif ağını yeniden kurar; bu her fizik
-		# adımında 12 ok için oluyordu. Yalnızca değişince yaz.
-		if _label.text != yazi:
-			_label.text = yazi
+		# Yalnızca kısa ad (Fg, N, F …); büyüklük sayı olarak yazılmaz,
+		# okun boyundan okunur. Label3D her metin atamasında glif ağını
+		# yeniden kurar: yalnızca değişince yaz.
+		if _label.text != label_text:
+			_label.text = label_text
 		# Etiket dunya eksenine gore hafif saga kaysin, ok donse de okunsun.
 		_label.position = Vector3(0.0, length + 0.14 + label_lift, 0.0)
 	else:

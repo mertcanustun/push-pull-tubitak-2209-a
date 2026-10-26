@@ -1,4 +1,5 @@
 res://config/ortam_ayarlari.tres::1a209cb3e1c044ab412edbf4b99f223b::1791627993::res://.godot/exported/133200997/export-2b2224381da61ad230cb1e34cbc82a4c-ortam_ayarlari.res
 res://config/sim2_config.tres::c4ebd73469ce1a3a888a581e5f41b13e::1791627993::res://.godot/exported/133200997/export-0993d76cec95554a75c304d920ea5466-sim2_config.res
-res://scenes/ball.tscn::fb9c7a911dc04cea2a537378d3c47401::1791627993::res://.godot/exported/133200997/export-d687370f64a28adc6cd2dc42f9ce6f46-ball.scn
-res://scenes/main.tscn::318b00a129c5ba22a75759a055940d83::1791627993::res://.godot/exported/133200997/export-3ad5c15c4f3250da0cc7c1af1770d85f-main.scn
+res://scenes/ball.tscn::4ed8335d233d0bfac4d7af36281a84f3::1792945836::res://.godot/exported/133200997/export-d687370f64a28adc6cd2dc42f9ce6f46-ball.scn
+res://scenes/main.tscn::b62e3735e677a2aec117b62525dac250::1793018765::res://.godot/exported/133200997/export-3ad5c15c4f3250da0cc7c1af1770d85f-main.scn
+res://config/secenekler.tres::cc0a8901b2bbe73e7ccc382d129e0e94::1793018636::res://.godot/exported/133200997/export-80880c8a250b0db968354bdf596a4905-secenekler.res

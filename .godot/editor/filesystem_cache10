@@ -1,5 +1,5 @@
 78098b89c88a74ebe8c20117b8754620
-::res://::1792947341
+::res://::1793018887
 export_presets.cfg::TextFile::-1::1792947341::0::1::::<><><>0<>0<><>::
 icon.svg::CompressedTexture2D::7251477383100204749::1791627480::1791627480::1::::<><><>0<>0<>45db94dbf3474b097bbc3a63dff3c9e8<>res://.godot/imported/icon.svg-218a8f2b3041327d8a5756f3a245f83b.ctex::
 MUJOCO_KURULUM.md::TextFile::-1::1791627480::0::1::::<><><>0<>0<><>::
@@ -28,14 +28,14 @@ scene.xml::TextFile::-1::1791627480::0::1::::<><><>0<>0<><>::
 ::res://scenes/::1791627993
 ball.tscn::PackedScene::-1::1792945836::0::1::::<><><>0<>0<><>::res://scripts/ball.gd<>res://assets/basketball_albedo.png<>res://assets/dust_particle.png<>res://assets/impact.wav<>res://scripts/force_arrow.gd
 main.tscn::PackedScene::6766257602054996736::1793018765::0::1::::<><><>0<>0<><>::res://scripts/main.gd<>res://scenes/ball.tscn<>res://scripts/gokyuzu.gd<>res://scripts/performans.gd
-::res://scripts/::1793018765
+::res://scripts/::1793018785
 ayarlar.gd::GDScript::2122041564355818783::1793018644::0::1::::<>Node<><>0<>0<><>::
 ball.gd::GDScript::6147375131829076670::1792944385::0::1::::Ball<>RigidBody3D<><>0<>0<><>::
 b_gosterim.gd::GDScript::5880327987435609667::1793018671::0::1::::BGosterimKamera<>Node<><>0<>0<><>::
 force_arrow.gd::GDScript::650297361673542832::1793018744::0::1::::ForceArrow<>Node3D<><>0<>0<><>::
 godot_backend.gd::GDScript::1919816550078682527::1792944385::0::1::::GodotBackend<>PhysicsBackend<><>0<>0<><>::
 gokyuzu.gd::GDScript::157250951055386511::1792945023::0::1::::Gokyuzu<>Node<><>0<>0<><>::
-hud.gd::GDScript::7031486035601835446::1793018765::0::1::::Hud<>CanvasLayer<><>0<>0<><>::
+hud.gd::GDScript::7031486035601835446::1793018785::0::1::::Hud<>CanvasLayer<><>0<>0<><>::
 kayit.gd::GDScript::4686706393304313831::1792947733::0::1::::<>Node<><>0<>0<><>::
 main.gd::GDScript::8256321184403487665::1793018736::0::1::::<>Node3D<><>0<>0<><>::
 mujoco_backend.gd::GDScript::398640232574083895::1791627480::0::1::::MuJoCoBackend<>PhysicsBackend<><>0<>0<><>::

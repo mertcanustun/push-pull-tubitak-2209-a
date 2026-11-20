@@ -63,7 +63,7 @@ signal degisti
 @export var kuvvet_oklari := true:
 	set(v): kuvvet_oklari = v; _degisti()
 ## (b) kamera takibindeki yükseklik cetveli (çentikler + 3B etiketler).
-@export var b_cetveli := false:
+@export var b_cetveli := true:
 	set(v): b_cetveli = v; _degisti()
 ## Godot Melez: her sekmede konsola "temas bitti" satırı (web'de konsol yavaş).
 @export var temas_logu := true:

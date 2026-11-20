@@ -112,6 +112,13 @@ var _kosu_sure := 0.0
 var _kosu_bitti := false
 var _en_yuksek := 0.0
 var camera: Camera3D
+## Sahnedeki sabit 1/2/3 m cetvelleri (Ruler*) — Sim2Config → cetveller.
+var _cetveller: Array[Node3D] = []
+var _cetvel_acik := false
+## Secimden sonra yerde duran top: ne kadardir duruyor (sn) ve uyutulduysa
+## tutuldugu konum (bkz. _dinlenme_uygula).
+var _dinlenme_sure := {}
+var _dinlenme_pos := {}
 var drag_ball := ""
 var drag_origin := Vector3.ZERO
 var drag_arrow: ForceArrow
@@ -125,6 +132,9 @@ func _ready() -> void:
 	camera = $Camera3D
 	_fov_16_9 = camera.fov
 	_kamera_taban = camera.global_transform
+	for n in get_children():
+		if n is Node3D and n.name.begins_with("Ruler"):
+			_cetveller.append(n)
 	get_viewport().size_changed.connect(_kamerayi_uydur)
 	_kamerayi_uydur()
 	_bcam = BGosterimKamera.new()
@@ -141,6 +151,7 @@ func _ready() -> void:
 	hud.gelistirici_kur(perf)
 	_build_balls()     # önce toplar: Godot Melez motoru bu node'ları kullanıyor
 	_build_backend()
+	_gorunum_uygula()
 	reset_sim()
 	_last_backend = cfg.backend
 	cfg.changed.connect(_on_cfg_changed)
@@ -327,6 +338,8 @@ func reset_sim() -> void:
 	_build_balls()
 	backend.reset()
 	phase = Phase.READY
+	_dinlenme_sure.clear()
+	_dinlenme_pos.clear()
 	running = false
 	_launch_slow = false
 	_launch_elapsed = 0.0
@@ -398,7 +411,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			_end_drag(event.position)
 
 
+## Sim2Config → Görünüm. Her karede cagrilir (Remote'tan canli degisebilsin);
+## yalnizca degisen sey dokunulur.
+func _gorunum_uygula() -> void:
+	hud.gorunum_ayarla(cfg.ust_yazilar, cfg.durum_panelleri)
+	ForceArrow.deger_goster = cfg.ok_degerleri
+	if cfg.cetveller != _cetvel_acik:
+		_cetvel_acik = cfg.cetveller
+		for n in _cetveller:
+			n.visible = _cetvel_acik
+
+
 func _process(dt: float) -> void:
+	_gorunum_uygula()
 	if _launch_slow and running:
 		# gercek zaman: Engine.time_scale (agir cekim) bu sureyi uzatmasin
 		_launch_elapsed += dt / maxf(Engine.time_scale, 1e-6)
@@ -451,8 +476,10 @@ func _physics_process_engine(delta: float) -> void:
 		_after_step(delta)
 	var n := _alt_bolme()
 	Engine.time_scale = user_speed * _gorunen_hiz()
-	Engine.physics_ticks_per_second = cfg.godot_tik_sayisi * n
-	Engine.max_physics_steps_per_frame = maxi(8, ceili(cfg.godot_tik_sayisi * n / 50.0))
+	var tik: int = cfg.godot_tik_sayisi * n
+	if Engine.physics_ticks_per_second != tik:
+		Engine.physics_ticks_per_second = tik
+		Engine.max_physics_steps_per_frame = maxi(8, ceili(tik / 50.0))
 	backend.set_running(running and phase != Phase.CHOICE)
 
 
@@ -468,7 +495,7 @@ func _gorunen_hiz() -> float:
 
 ## Temas cozumu icin gereken adim, gorunen hizdan kac kat kucuk olmali.
 func _alt_bolme() -> int:
-	var gerekli := _slowmo()
+	var gerekli := _slowmo(true)
 	if _launch_slow:
 		gerekli = minf(gerekli, cfg.firlatma_agir_cekim_carpani)
 	return maxi(1, ceili(_gorunen_hiz() / gerekli - 1e-6))
@@ -497,14 +524,25 @@ func _pre_step(step: float) -> void:
 ## Temas ani milisaniyeler surer. Top zemine yaklasirken/temas ederken fizik
 ## adimi bu carpan kadar kuculur. Secimden once bu ayni zamanda gorunen
 ## agir cekimdir (oklar gorunsun); sonrasi icin bkz. _gorunen_hiz().
-func _slowmo() -> float:
+##
+## kucuk_adim: yalnizca fizik adimi icin (gorunmez). Esik cok daha dusuk ve
+## zemine 1 cm'den yakin top da sayilir: eskiden kucuk sekmeler (< 0.6 m/s)
+## yakalanmiyor, temas tek 8 ms'lik adimda cozuluyor ve yay-sonumleyici
+## temas topa enerji katiyordu (0.02 m'lik sekme sonrakinde 1.5-2.3 m).
+## Agir cekim ise yalnizca gercek sekmelerde (yerde titreyen top zamani
+## sonsuza dek yavaslatmasin diye 0.6 m/s esigi korunur).
+func _slowmo(kucuk_adim: bool = false) -> float:
+	var esik := 0.05 if kucuk_adim else 0.6
 	var f := 1.0
 	for side in ["left", "right"]:
 		var s := backend.get_state(side)
-		if s == null:
+		if s == null or _dinlenme_pos.has(side):
 			continue
 		var gap: float = s.position.y - cfg.radius - GROUND_Y
-		var fast := absf(s.velocity.y) > 0.6
+		if kucuk_adim and gap < 0.01 and _carpisan(side):
+			f = cfg.agir_cekim_carpani
+			continue
+		var fast := absf(s.velocity.y) > esik
 		# Temasin dip noktasinda hiz ~0 oldugu icin "fast" bir an duser ve
 		# o kare normal hizda (tek buyuk adim) gecer: Godot Melez'de temas
 		# bozulur, diger motorlarda agir cekim bir kare titrer. Temas kuvveti
@@ -512,9 +550,47 @@ func _slowmo() -> float:
 		# N ~ m·g oldugu icin orada normal hiza doner).
 		var pressing: bool = s.touching_ground \
 				and s.f_contact.y > 3.0 * s.mass * PhysicsBackend.GRAVITY.length()
-		if (s.touching_ground and (fast or pressing)) or (gap < 0.30 and s.velocity.y < -0.6):
+		if (s.touching_ground and (fast or pressing)) or (gap < 0.30 and s.velocity.y < -esik):
 			f = cfg.agir_cekim_carpani
 	return f
+
+
+## Bu top zeminle temas ediyor mu (sol: carpisma acik; sag: (a)'da soldakinin
+## temas kuvvetini aliyor). (c)'de yerde tutulan sag top sayilmaz.
+func _carpisan(side: String) -> bool:
+	if side == "right":
+		return _mirror_a and not hold_right
+	return backend.get_spec(side).collisions_enabled
+
+
+## Secimden sonra yerde DURAN top uyutulur: konumu sabitlenir, hizi sifir.
+## Yoksa her adimda temas yeniden cozulur (kucuk adimla saniyede ~2400
+## adim) — durmus bir top icin bosuna islemci, web'de takilma. Top
+## 0.3 sn boyunca zemine 1 cm'den yakin ve 5 cm/s'den yavas kalinca uyur;
+## yay temasin dengesinde (N ≈ m·g) tutuldugu icin oklar dogru kalir.
+const DINLENME_HIZ := 0.05
+const DINLENME_SURE := 0.3
+
+func _dinlenme_uygula(step: float) -> void:
+	if phase != Phase.RESOLVED:
+		return
+	for side in ["left", "right"]:
+		if not _carpisan(side):
+			continue
+		var s := backend.get_state(side)
+		if _dinlenme_pos.has(side):
+			backend.set_position(side, _dinlenme_pos[side])
+			backend.set_velocity(side, Vector3.ZERO)
+			s.position = _dinlenme_pos[side]
+			s.velocity = Vector3.ZERO
+			continue
+		var gap: float = s.position.y - cfg.radius - GROUND_Y
+		if gap < 0.01 and absf(s.velocity.y) < DINLENME_HIZ:
+			_dinlenme_sure[side] = _dinlenme_sure.get(side, 0.0) + step
+			if _dinlenme_sure[side] >= DINLENME_SURE:
+				_dinlenme_pos[side] = s.position
+		else:
+			_dinlenme_sure[side] = 0.0
 
 
 func _after_step(step: float) -> void:
@@ -571,7 +647,7 @@ func _after_step(step: float) -> void:
 			if _davranis == "b" and (_b_mode == Sim2Config.BGosterim.KAMERA_TAKIP \
 					or _b_mode == Sim2Config.BGosterim.IKISI):
 				# Top TUTULMAZ, ucmaya devam eder; kamera onu tepeye kadar izler.
-				_bcam.start_follow(balls["right"], perf.b_cetveli)
+				_bcam.start_follow(balls["right"], perf.b_cetveli and cfg.cetveller)
 				_left_frozen = true
 				_left_freeze_pos = sl.position
 				_left_freeze_vel = sl.velocity
@@ -589,6 +665,8 @@ func _after_step(step: float) -> void:
 
 	if phase == Phase.RESOLVED:
 		_en_yuksek = maxf(_en_yuksek, sr.position.y - cfg.radius)
+
+	_dinlenme_uygula(step)
 
 	if impulse_left > 0.0:
 		impulse_left -= _applied_f * step
@@ -829,6 +907,8 @@ func _end_drag(screen_pos: Vector2) -> void:
 	# Bu bir "rigidbody modifier": kuvvet fizik motoruna verilir, dolayisiyla
 	# yercekimi ve hava surtunmesiyle birlikte cozulur - okun kendi ozelligi degil.
 	backend.set_external_force(drag_ball, force)
+	_dinlenme_pos.erase(drag_ball)   # uyuyan top ok araciyla yeniden hareket eder
+	_dinlenme_sure.erase(drag_ball)
 	impulse_left = 0.0
 	var label: String = "Sol" if drag_ball == "left" else "Sağ"
 	drag_ball = ""

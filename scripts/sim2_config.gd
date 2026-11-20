@@ -115,6 +115,18 @@ enum EnYuksek { CANLI, SON_REKOR, GIZLI }
 ## sorusu (config/secenekler.tres) gösterilir.
 @export_range(0.5, 30.0, 0.5, "suffix:sn") var kosu_sonu_bekleme: float = 4.0
 
+@export_group("Görünüm")
+## Başlık ("ETKİ – TEPKİ: …") ve altındaki durum yazısı. Anında işler.
+@export var ust_yazilar: bool = false
+## SOL / SAĞ durum panelleri (yükseklik, hız, kuvvetler). Anında işler.
+@export var durum_panelleri: bool = false
+## Sahnedeki 1 / 2 / 3 m cetvelleri ve (b) kamera takibindeki yükseklik
+## cetveli. Anında işler (takip cetveli bir sonraki (b)'de).
+@export var cetveller: bool = false
+## Okların yanında kuvvet büyüklüğü ("Fg 6.1 N"). Kapalıyken yalnız ad
+## ("Fg") yazar. Anında işler.
+@export var ok_degerleri: bool = false
+
 @export_group("(b) gösterimi")
 ## (b)'de top ~1200 m/s ile fırlar: 9 m'ye (ekrandan çıkış) 11 ms'de varır,
 ## normal hızda tek kareden kısa. Bu ayarlar YALNIZCA görüntüyü/zamanı

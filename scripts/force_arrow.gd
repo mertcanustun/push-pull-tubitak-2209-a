@@ -14,6 +14,9 @@ const MIN_LENGTH := 0.10
 ## Okun yanındaki kısa ad (Fg, Fs, N, F, Fnet …).
 @export var label_text := ""
 var show_label := true
+## Etikette büyüklük de yazılsın mı ("Fg 6.1 N" / yalnız "Fg"). Tüm oklar
+## için ortak; main.gd Sim2Config → Görünüm → ok_degerleri'nden ayarlar.
+static var deger_goster := false
 ## Etiketler birbirinin uzerine binmesin diye her oka farkli bir kaldirma.
 var label_lift := 0.0
 ## Okun rengi (gövde, uç ve yazı). Ok renkleri HUD açıklamasıyla aynı kalmalı.
@@ -125,11 +128,15 @@ func set_force(force: Vector3, k: float, logarithmic: bool = true) -> void:
 
 	if show_label:
 		_label.visible = true
-		# Yalnızca kısa ad (Fg, N, F …); büyüklük sayı olarak yazılmaz,
-		# okun boyundan okunur. Label3D her metin atamasında glif ağını
-		# yeniden kurar: yalnızca değişince yaz.
-		if _label.text != label_text:
-			_label.text = label_text
+		# Varsayılan yalnızca kısa ad (Fg, N, F …); büyüklük okun boyundan
+		# okunur (deger_goster ile sayı da yazılır). Label3D her metin
+		# atamasında glif ağını yeniden kurar: yalnızca değişince yaz.
+		var yazi := label_text
+		if deger_goster:
+			var num := "%.1f" % magnitude if magnitude < 10.0 else "%.0f" % magnitude
+			yazi = "%s %s N" % [label_text, num]
+		if _label.text != yazi:
+			_label.text = yazi
 		# Etiket dunya eksenine gore hafif saga kaysin, ok donse de okunsun.
 		_label.position = Vector3(0.0, length + 0.14 + label_lift, 0.0)
 	else:

@@ -426,7 +426,8 @@ func _build_title() -> void:
 	_status = _sarmali(_label("Başlatmak için SPACE ya da Başlat", 17, MUTED))
 	_status.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	box.add_child(_status)
-	# Ust baslik ve durum yazisi gosterilmiyor (set_status yine calisir).
+	# Varsayilan gizli (Sim2Config → Görünüm → ust_yazilar; set_status yine
+	# calisir). main.gd gorunum_ayarla ile acar/kapar.
 	box.visible = false
 
 
@@ -502,7 +503,7 @@ func _build_side_panels() -> void:
 	for i in 2:
 		_yan[i]["panel"].size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 		_aciklama_goster(i, true)
-	# Sol/sag top durum panelleri gosterilmiyor.
+	# Varsayilan gizli (Sim2Config → Görünüm → durum_panelleri).
 	_yan_satir.visible = false
 
 
@@ -1054,6 +1055,15 @@ func soru_goster(secenek_metni: String, soru: String, metin_girisi: bool) -> voi
 
 func soru_kapat() -> void:
 	_soru_katman.visible = false
+
+
+## Sim2Config → Görünüm: baslik + durum yazisi, SOL / SAG panelleri.
+func gorunum_ayarla(ust_yazilar: bool, durum_panelleri: bool) -> void:
+	if ust_yazilar == _baslik_kutu.visible and durum_panelleri == _yan_satir.visible:
+		return
+	_baslik_kutu.visible = ust_yazilar
+	_yan_satir.visible = durum_panelleri
+	_yerlestir()
 
 
 func show_feedback(bbcode: String) -> void:

@@ -143,6 +143,8 @@ func _ready() -> void:
 	_bcam.setup(cfg, camera, func() -> bool: return running)
 	_bcam.takip_sure_doldu.connect(_on_follow_timeout)
 	_bcam.donus_basladi.connect(_unfreeze_left)
+	_bolunmus_kur()
+	get_viewport().size_changed.connect(_bolunmus_yerlestir)
 	drag_arrow = ForceArrow.new(Color(1.0, 1.0, 1.0), "surukle")
 	add_child(drag_arrow)
 	perf = $Performans
@@ -154,6 +156,7 @@ func _ready() -> void:
 	_gorunum_uygula()
 	reset_sim()
 	_last_backend = cfg.backend
+	hud.giris_baslat.call_deferred()   # katilimci kodu + yonerge (bir kez)
 	cfg.changed.connect(_on_cfg_changed)
 
 
@@ -209,10 +212,19 @@ func _kamerayi_uydur() -> void:
 	var tek := Ayarlar.referanssiz()
 	var cx := HALF_X if tek else 0.0
 	var yari := KUTU_X_TEK if tek else KUTU_X
+	# yatay bant: tum ekran; bolunmus ekranda yalniz sol yari (soldaki top
+	# oraya ortalanir, lens yatay kaydirilir)
+	var xc := 0.0
+	var hw := bx
+	if _bolunmus:
+		cx = -HALF_X
+		yari = KUTU_X_TEK
+		xc = -bx * 0.5
+		hw = bx * 0.5
 	var taban := _kamera_taban.translated(Vector3(cx, 0.0, 0.0))
 	if _bcam:
 		_bcam.taban_ayarla(taban)
-	else:
+	if _bolunmus or not _bcam:
 		camera.global_transform = taban
 	var ters := taban.affine_inverse()
 	var umin := INF
@@ -221,7 +233,7 @@ func _kamerayi_uydur() -> void:
 		for y in [KUTU_ALT, KUTU_UST]:
 			var p: Vector3 = ters * Vector3(x, y, 0.0)
 			var d := -p.z
-			t = maxf(t, absf(p.x / d) / (a * bx))
+			t = maxf(t, absf(p.x / d) / (a * hw))
 			umin = minf(umin, p.y / d)
 			umax = maxf(umax, p.y / d)
 	# kaydirmadan sigdirmak icin gereken aci ...
@@ -243,7 +255,89 @@ func _kamerayi_uydur() -> void:
 	camera.keep_aspect = Camera3D.KEEP_HEIGHT
 	camera.projection = Camera3D.PROJECTION_FRUSTUM
 	camera.size = 2.0 * camera.near * t
-	camera.frustum_offset = Vector2(0.0, merkez * camera.near)
+	camera.frustum_offset = Vector2(-xc * a * t * camera.near, merkez * camera.near)
+	_son_t = t
+
+
+# ------------------------------------------------------------ bolunmus ekran
+
+## (b) secenegi, iki toplu mod (5.2): ekran ikiye bolunur. Sol yari ana
+## kamera (soldaki topa ortali), sag yari ayni dunyayi ikinci bir kamerayla
+## gosteren SubViewport — o kamera sagdaki topu tepeye kadar izler. Takip
+## bitince (kamera ana poza donunce) ekran yeniden tek parca.
+var _bolunmus := false
+var _son_t := 0.5          # ana kameranin son dikey yari-aci tanjanti
+var _bolum_katman: CanvasLayer
+var _bolum_kap: SubViewportContainer
+var _bolum_vp: SubViewport
+var _sag_kamera: Camera3D
+var _bolum_cizgi: ColorRect
+
+func _bolunmus_kur() -> void:
+	_bolum_katman = CanvasLayer.new()
+	_bolum_katman.layer = 0          # 3B sahnenin ustu, Hud'un (1) alti
+	_bolum_katman.visible = false
+	add_child(_bolum_katman)
+	_bolum_kap = SubViewportContainer.new()
+	_bolum_kap.stretch = true
+	_bolum_kap.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bolum_katman.add_child(_bolum_kap)
+	_bolum_vp = SubViewport.new()   # own_world_3d yok: ayni dunyayi gosterir
+	_bolum_vp.msaa_3d = get_viewport().msaa_3d
+	_bolum_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED
+	_bolum_kap.add_child(_bolum_vp)
+	_sag_kamera = Camera3D.new()
+	_sag_kamera.keep_aspect = Camera3D.KEEP_HEIGHT
+	_sag_kamera.near = camera.near
+	_sag_kamera.far = camera.far
+	_sag_kamera.environment = camera.environment
+	_sag_kamera.attributes = camera.attributes
+	_bolum_vp.add_child(_sag_kamera)
+	_bolum_cizgi = ColorRect.new()
+	_bolum_cizgi.color = Color(1, 1, 1, 0.55)
+	_bolum_cizgi.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bolum_katman.add_child(_bolum_cizgi)
+
+
+func _bolunmus_yerlestir() -> void:
+	if not _bolunmus:
+		return
+	var s := get_viewport().get_visible_rect().size
+	# SubViewport fiziksel piksel cozunurlugunde cizsin (Retina'da bulanik
+	# olmasin): kap fiziksel boyutta, olcekle ekrana sigdirilir.
+	var k := float(get_window().size.x) / maxf(s.x, 1.0)
+	_bolum_kap.position = Vector2(s.x * 0.5, 0.0)
+	_bolum_kap.scale = Vector2.ONE / k
+	_bolum_kap.size = Vector2(s.x * 0.5, s.y) * k
+	_bolum_cizgi.position = Vector2(s.x * 0.5 - 1.5, 0.0)
+	_bolum_cizgi.size = Vector2(3.0, s.y)
+	# sag yari: sagdaki top ortada, yari ekran genisligine sigacak aci
+	var a := s.x * 0.5 / maxf(s.y, 1.0)
+	var t := maxf(_son_t, (KUTU_X_TEK / (_kamera_taban.origin.z)) / a)
+	_sag_kamera.fov = rad_to_deg(2.0 * atan(t))
+
+
+func _sag_taban() -> Transform3D:
+	return _kamera_taban.translated(Vector3(HALF_X, 0.0, 0.0))
+
+
+func _bolunmus_ac() -> void:
+	if _bolunmus:
+		return
+	_bolunmus = true
+	_bolum_katman.visible = true
+	_bolum_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_kamerayi_uydur()
+	_bolunmus_yerlestir()
+
+
+func _bolunmus_kapat() -> void:
+	if not _bolunmus:
+		return
+	_bolunmus = false
+	_bolum_katman.visible = false
+	_bolum_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED   # kapaliyken cizme
+	_kamerayi_uydur()
 
 
 
@@ -260,6 +354,7 @@ func _build_hud() -> void:
 	hud.ust_serbest_degisti.connect(func(y: float): _bcam.etiket_ust_ayarla(y))
 	hud.soru_kapandi.connect(_on_soru_kapandi)
 	hud.referanssiz_degisti.connect(func(_on: bool): reset_sim())
+	hud.giris_tamam.connect(_on_giris)
 
 
 ## Hangi fizik arka ucu kullanilsin: cfg.backend'den okunur (Inspector/Remote).
@@ -347,6 +442,7 @@ func reset_sim() -> void:
 	_left_frozen = false
 	if _bcam:
 		_bcam.reset()
+		_bolunmus_kapat()
 	choice = ""
 	_davranis = ""
 	_oklari_gizle = false
@@ -369,7 +465,7 @@ func reset_sim() -> void:
 	drag_ball = ""
 	drag_arrow.set_force(Vector3.ZERO, cfg.ok_olcegi)
 	hud.show_choice(false)
-	hud.show_feedback("")
+	hud.soru_seridi(Ayarlar.metin("secim_basligi"))
 	hud.soru_kapat()
 	_referans_uygula()
 	hud.set_start_text("Başlat")
@@ -424,6 +520,12 @@ func _gorunum_uygula() -> void:
 
 func _process(dt: float) -> void:
 	_gorunum_uygula()
+	# Oklar ve kukla toplarin konumu ekran karesi basina BIR kez: eskiden her
+	# fizik adiminda yapiliyordu — temasta saniyede 2400 adimla kare basina
+	# ~40 kez 12 ok + etiket (Mac'te kare basina ~29 ms, web'de takilma).
+	_sync_visuals()
+	if _bolunmus and not _bcam.is_active():
+		_bolunmus_kapat()   # sag yarinin kamerasi ana poza dondu
 	if _launch_slow and running:
 		# gercek zaman: Engine.time_scale (agir cekim) bu sureyi uzatmasin
 		_launch_elapsed += dt / maxf(Engine.time_scale, 1e-6)
@@ -453,7 +555,6 @@ func _physics_process(delta: float) -> void:
 			_pre_step(step)
 			backend.step(step)
 			_after_step(step)
-	_sync_visuals()
 
 
 ## Godot Melez: adimlari fizik motoru atar. Bu tikin delta'si zaten
@@ -474,7 +575,9 @@ func _physics_process_engine(delta: float) -> void:
 		backend.step(delta)
 		_pre_step(delta)
 		_after_step(delta)
-	var n := _alt_bolme()
+	# secim ekraninda / duraklatilinca fizik ilerlemiyor: saniyede 2400 bos
+	# adim atilmasin
+	var n := _alt_bolme() if advancing else 1
 	Engine.time_scale = user_speed * _gorunen_hiz()
 	var tik: int = cfg.godot_tik_sayisi * n
 	if Engine.physics_ticks_per_second != tik:
@@ -647,10 +750,17 @@ func _after_step(step: float) -> void:
 			if _davranis == "b" and (_b_mode == Sim2Config.BGosterim.KAMERA_TAKIP \
 					or _b_mode == Sim2Config.BGosterim.IKISI):
 				# Top TUTULMAZ, ucmaya devam eder; kamera onu tepeye kadar izler.
-				_bcam.start_follow(balls["right"], perf.b_cetveli and cfg.cetveller)
-				_left_frozen = true
-				_left_freeze_pos = sl.position
-				_left_freeze_vel = sl.velocity
+				var cetvel: bool = perf.b_cetveli and cfg.cetveller
+				if Ayarlar.referanssiz():
+					_bcam.start_follow(balls["right"], cetvel)
+					_left_frozen = true
+					_left_freeze_pos = sl.position
+					_left_freeze_vel = sl.velocity
+				else:
+					# Bolunmus ekran: sol yarida soldaki top (sekmeye devam eder,
+					# bekletilmez), sag yarida kamera sagdaki topu izler.
+					_bolunmus_ac()
+					_bcam.start_follow(balls["right"], cetvel, _sag_kamera, _sag_taban())
 			else:
 				hold_pos = Vector3(HALF_X, cfg.ekrandan_cikis_yuksekligi, 0.0)
 				hold_right = true
@@ -733,7 +843,9 @@ func _on_choice(c: String) -> void:
 	_kosu_bitti = false
 	_en_yuksek = 0.0
 	hud.show_choice(false)
-	Kayit.olay("secim", {"secenek": c, "secenek_metni": str(sec.get("metin", ""))})
+	hud.soru_seridi(Ayarlar.metin("secim_basligi"), _secim_yazisi())
+	Kayit.olay("secim", {"secenek": c, "secenek_metni": str(sec.get("metin", "")),
+		"soru": Ayarlar.metin("secim_basligi")})
 	var sr := backend.get_state("right")
 	_apply_choice_force(sr)
 	(balls["right"] as Ball).play_impact(GROUND_Y, v_impact)
@@ -786,12 +898,24 @@ func _kosu_sonu() -> void:
 	_kosu_bitti = true
 	if cfg.en_yuksek_gosterimi == Sim2Config.EnYuksek.SON_REKOR and _en_yuksek > 0.05:
 		_bcam.rekor_goster(_en_yuksek)
+	# Sikkin sorusu ustteki seritte, ana sorunun altinda (pencere yok: Sifirla
+	# ve Baslat her zaman basilabilir; yazili cevap yok, sesli dusunme).
 	var sec := Ayarlar.secenek(choice)
 	var soru := str(sec.get("son_soru", "")).strip_edges()
-	if soru == "":
-		return   # soru henuz yazilmamis (ör. a): pencere acilmaz
-	hud.soru_goster("%s %s" % [sec.get("harf", ""), sec.get("metin", "")], soru,
-		bool(Ayarlar.veri.get("soru_metin_girisi", true)))
+	hud.soru_seridi(Ayarlar.metin("secim_basligi"), _secim_yazisi(), soru,
+		Ayarlar.metin("bitis_ipucu") if soru != "" else "")
+
+
+func _secim_yazisi() -> String:
+	var sec := Ayarlar.secenek(choice)
+	return "%s %s" % [sec.get("harf", ""), sec.get("metin", "")]
+
+
+## Acilis (kod + yonerge) kapandi: kayit bu kodla baslar, simulasyon oynar.
+func _on_giris(kod: String) -> void:
+	Kayit.kod_ayarla(kod)
+	if phase == Phase.READY and not running:
+		_on_start()
 
 
 func _on_soru_kapandi(cevap: String, kaydet: bool) -> void:
@@ -848,26 +972,35 @@ func _sync_visuals() -> void:
 
 		var d := _display_forces(side, s)
 
-		# Oklar yan yana dizilir; etiketler farkli yuksekliklere kaldirilir.
-		_set_arrow(ball, "gravity", d["gravity"], 0)
-		_set_arrow(ball, "drag", d["drag"], 1)
-		_set_arrow(ball, "contact", d["contact"], 2)
-		_set_arrow(ball, "external", d["external"], 3)
-		_set_arrow(ball, "net", d["net"], 4)
-		_set_arrow(ball, "net_minus_g", d["net"] - d["gravity"], 5)
+		# Oklar topun merkezinden cikar ve yalnizca ACIK olanlar topun
+		# ustunde sik dizilir (kapali oklar arada bosluk birakmaz); etiketler
+		# birbirine binmesin diye farkli yuksekliklere kaldirilir.
+		var kuvvetler := {
+			"gravity": d["gravity"], "drag": d["drag"], "contact": d["contact"],
+			"external": d["external"], "net": d["net"],
+			"net_minus_g": d["net"] - d["gravity"],
+		}
+		var gizli: bool = not perf.kuvvet_oklari or (_oklari_gizle and ball == balls["right"])
+		var acik: Array = []
+		for key in OK_SIRASI:
+			if arrow_on.get(key, false) and not gizli:
+				acik.append(key)
+		for key in OK_SIRASI:
+			var i := acik.find(key)
+			_set_arrow(ball, key, kuvvetler[key] if i >= 0 else Vector3.ZERO,
+				float(i) - (acik.size() - 1) * 0.5, maxi(i, 0))
 
 
-const ARROW_SPACING := 0.24
+const OK_SIRASI := ["gravity", "drag", "contact", "external", "net", "net_minus_g"]
+## Yan yana iki ok arasi (m). Top capi 0.24 m: dort ok topun genisliginde
+## kalir, ok uclari (0.11 m) birbirine degmez.
+const ARROW_SPACING := 0.12
 
-func _set_arrow(ball: Ball, key: String, force: Vector3, slot: int) -> void:
+func _set_arrow(ball: Ball, key: String, force: Vector3, konum: float, sira: int) -> void:
 	var a: ForceArrow = ball.arrows[key]
-	a.position = Vector3((float(slot) - 1.6) * ARROW_SPACING, 0.0, 0.0)
-	a.label_lift = float(slot) * 0.13
-	var gizli: bool = not perf.kuvvet_oklari or (_oklari_gizle and ball == balls["right"])
-	if arrow_on.get(key, false) and not gizli:
-		a.set_force(force, cfg.ok_olcegi)
-	else:
-		a.set_force(Vector3.ZERO, cfg.ok_olcegi)
+	a.position = Vector3(konum * ARROW_SPACING, 0.0, 0.0)
+	a.label_lift = float(sira) * 0.13
+	a.set_force(force, cfg.ok_olcegi)
 
 
 # ------------------------------------------------------------- ok araci

@@ -10,7 +10,7 @@ harf = "a)"
 metin = "Top ve Zemin birbirine aynı büyüklükte kuvvet uygular"
 davranis = "a"
 oklari_gizle = false
-son_soru = ""
+son_soru = "Top neden bu şekilde sekmeye devam etti? Topa hangi kuvvetler etki ediyor? Düşündüklerinizi sesli olarak anlatın."
 
 [sub_resource type="Resource" id="Resource_b"]
 script = ExtResource("2_secenek")
@@ -19,7 +19,7 @@ harf = "b)"
 metin = "Top daha küçük olduğu için Zemin topun ona uyguladığından daha büyük bir kuvvet uygular"
 davranis = "b"
 oklari_gizle = false
-son_soru = "Sence top neden fırladı? Topun zemine uyguladığı kuvvetin büyüklüğü ne kadar olabilir?"
+son_soru = "Top neden o kadar yükseldi? Düşündüklerinizi sesli olarak anlatın."
 
 [sub_resource type="Resource" id="Resource_c"]
 script = ExtResource("2_secenek")
@@ -28,7 +28,7 @@ harf = "c)"
 metin = "Topa hem etki hem de tepki kuvvetleri etki eder."
 davranis = "c"
 oklari_gizle = false
-son_soru = "Sence topun hareketsiz kalmasındaki sebep nedir? Hangi kuvvetin harekete sebep olmasını bekliyordun?"
+son_soru = "Top neden hareketsiz kaldı? Hangi kuvvetin harekete sebep olmasını bekliyordunuz? Düşündüklerinizi sesli olarak anlatın."
 
 [sub_resource type="Resource" id="Resource_d"]
 script = ExtResource("2_secenek")
@@ -37,13 +37,28 @@ harf = "d)"
 metin = "Toptaki etki kuvveti zemine tepki olarak geçer"
 davranis = "c"
 oklari_gizle = true
-son_soru = "Sence top neden hareket etmiyor? Topun üzerinde hangi kuvvetin harekete sebep olmasını bekliyordun?"
+son_soru = "Top neden hareket etmiyor? Topun üzerinde hangi kuvvetin harekete sebep olmasını bekliyordunuz? Düşündüklerinizi sesli olarak anlatın."
 
 [resource]
 script = ExtResource("1_verisi")
-secim_basligi = "Top tam zemine değdi. Zemin topa hangi kuvveti uygular?"
-secim_ipucu = "Sol taraf gerçek fiziği gösteriyor. Sağdaki top için sen karar ver."
-secim_ipucu_referanssiz = "Sağdaki top için sen karar ver."
+kod_iste = true
+kod_basligi = "Katılımcı Kodu"
+kod_aciklamasi = "Size verilen kodu yazın ve Tamam'a basın."
+yonerge_goster = true
+yonerge = "[b]Nasıl Çalışır?[/b]
+
+Birazdan topun hareketini izleyeceksiniz. Top zemine değdiği anda simülasyon duracak ve karşınıza bir soru çıkacak.
+
+•  Seçeneklerden birini işaretleyerek topun hareketini ve kuvvet oklarını gözlemleyin.
+•  Simülasyonu durdurabilir, yavaşlatabilir veya [b]Sıfırla[/b] butonuna basarak diğer seçenekleri tekrar deneyebilirsiniz.
+•  Karar verirken ve sonuçları izlerken düşüncelerinizi sesli olarak ifade edin.
+
+Katkılarınız için teşekkür ederiz. [b]Devam Et[/b] butonuna tıklayarak başlayabilirsiniz."
+devam_dugmesi = "Devam Et"
+secim_basligi = "Top az önce yere düşerek zeminle temas etti. Bundan sonra topa hangi kuvvetler uygulanacaktır?"
+secim_ipucu = ""
+secim_ipucu_referanssiz = ""
+bitis_ipucu = "Sıfırla butonuyla diğer seçenekleri de deneyebilirsiniz."
 soru_basligi = "Soru"
-soru_metin_girisi = true
+soru_metin_girisi = false
 secenekler = Array[ExtResource("2_secenek")]([SubResource("Resource_a"), SubResource("Resource_b"), SubResource("Resource_c"), SubResource("Resource_d")])

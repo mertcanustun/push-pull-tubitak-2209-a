@@ -111,9 +111,14 @@ func _reset_body(spec: PhysicsBackend.BodySpec) -> void:
 	_ext[spec.id] = Vector3.ZERO
 	_v_prev[spec.id] = spec.velocity
 	var b: RigidBody3D = _bodies[spec.id]
-	b.global_transform = Transform3D(Basis(), spec.position)
+	var xf := Transform3D(Basis(), spec.position)
+	b.global_transform = xf
 	b.linear_velocity = spec.velocity
 	b.angular_velocity = Vector3.ZERO
+	# sunucuya da dogrudan: dugum bildirimi bir sonraki adimi kacirabiliyor
+	PhysicsServer3D.body_set_state(b.get_rid(), PhysicsServer3D.BODY_STATE_TRANSFORM, xf)
+	PhysicsServer3D.body_set_state(b.get_rid(), PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, spec.velocity)
+	PhysicsServer3D.body_set_state(b.get_rid(), PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.ZERO)
 	_held_vel[spec.id] = spec.velocity
 
 
@@ -141,9 +146,13 @@ func reset() -> void:
 	_mirror_src = ""
 	_mirror_dst = ""
 	_mirror_sync = false
+	# ONCE dondur, SONRA konumla. Ters sirada (hareket eden cisme konum yazip
+	# sonra dondurunce) fizik sunucusu eski konumu geri yaziyordu: web'de
+	# Sifirla'dan 0.3 sn sonra toplar eski yerlerine donuyordu (2-3 kez basmak
+	# gerekiyordu).
+	set_running(false)
 	for id in _specs:
 		_reset_body(_specs[id])
-	set_running(false)
 
 
 func set_contact_mirror(source: String, target: String) -> bool:

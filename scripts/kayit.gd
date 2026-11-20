@@ -9,6 +9,12 @@ extends Node
 ## gerekmez). Masaüstünde MASAUSTU_ADRES boşsa hiçbir şey gönderilmez;
 ## yerel CSV (Ayarlar.cevap_kaydet) her durumda yazılmaya devam eder.
 ##
+## KATILIMCI KODU: açılıştaki kod ekranından gelen kod (kod_ayarla) oturum
+## kimliğinin başına yazılır: "K12-18c3f…". Sunucu (api/log.js) yalnızca
+## bilinen alanları sakladığı için ayrı bir "kod" sütunu yerine bu yol
+## seçildi; CSV'de oturum sütunu kodla başlar. Kod girilene kadar hiçbir
+## olay gönderilmez (kuyrukta bekler).
+##
 ## Gönderilemeyen olay kuyrukta kalır ve YENIDEN_DENEME saniye sonra tekrar
 ## denenir; oyun hiçbir zaman beklemez.
 
@@ -24,6 +30,8 @@ var _oturum := ""
 var _kuyruk: Array[Dictionary] = []
 var _istek: HTTPRequest
 var _mesgul := false
+## Kod girildi mi (kod_ayarla çağrıldı mı). Öncesindeki olaylar bekler.
+var _hazir := false
 
 
 func _ready() -> void:
@@ -35,6 +43,19 @@ func _ready() -> void:
 	_istek.timeout = 10.0
 	_istek.request_completed.connect(_tamamlandi)
 	add_child(_istek)
+
+
+## Açılıştaki kod ekranı kapanınca çağrılır (kod istenmiyorsa boş kodla).
+## Oturum kimliği kodla başlar; bekleyen olaylar da bu kimlikle gider.
+func kod_ayarla(kod: String) -> void:
+	if _hazir:
+		return
+	_hazir = true
+	kod = kod.strip_edges().replace(",", " ").left(40)
+	if kod != "":
+		_oturum = "%s-%s" % [kod, _oturum]
+	for d in _kuyruk:
+		d["oturum"] = _oturum
 	olay("oturum_basladi")
 
 
@@ -64,7 +85,7 @@ func olay(ad: String, alanlar: Dictionary = {}) -> void:
 
 
 func _gonder() -> void:
-	if _mesgul or _kuyruk.is_empty():
+	if _mesgul or not _hazir or _kuyruk.is_empty():
 		return
 	_mesgul = true
 	var hata := _istek.request(_adres, ["Content-Type: application/json"],

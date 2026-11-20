@@ -25,6 +25,9 @@ signal choice_made(choice: String)
 signal sahne_payi_degisti(sol: float, sag: float, ust: float, alt: float)
 ## Ust kisimdaki arayuzun (baslik, ustteki geri bildirim) bittigi y (dp).
 signal ust_serbest_degisti(y: float)
+## Açılış (kod + yönerge) bitti: simülasyon başlayabilir. kod: girilen
+## katılımcı kodu (kod istenmiyorsa boş).
+signal giris_tamam(kod: String)
 ## Koşu sonu soru penceresi kapandı. kaydet: öğrenci "Kaydet"e bastı.
 signal soru_kapandi(cevap: String, kaydet: bool)
 ## Ayarlar → Referanssız mod değişti (main.gd sahneyi sıfırlar).
@@ -34,9 +37,11 @@ signal referanssiz_degisti(on: bool)
 ##     1  Hud (bu düğüm): başlık, paneller, kontroller, seçim, geri bildirim
 ##     5  BGosterimKamera: (b) yükseklik yazısı / "En yüksek" rekoru
 ##    80  PerformansDenetimi: FPS göstergesi (fareyi yutmaz)
-##    90  Koşu sonu soru penceresi (modal)
+##    90  Koşu sonu soru penceresi (modal; artık kullanılmıyor, soru şeritte)
+##    95  Açılış: katılımcı kodu + kullanım yönergesi (modal)
 ##   100  Ayarlar penceresi (modal) — HER ZAMAN EN ÜSTTE
 const SORU_KATMANI := 90
+const GIRIS_KATMANI := 95
 const AYAR_KATMANI := 100
 
 const BG := Color(0.07, 0.08, 0.11, 0.88)
@@ -130,6 +135,15 @@ var _soru_icerik: VBoxContainer
 var _secim_kaydir: ScrollContainer
 var _secim_icerik: VBoxContainer
 var _geri_kaydir: ScrollContainer
+# acilis penceresi: kod, sonra yonerge (kendi CanvasLayer'i, GIRIS_KATMANI)
+var _giris_katman: CanvasLayer
+var _giris_panel: PanelContainer
+var _giris_icerik: VBoxContainer
+var _kod_kutu: VBoxContainer
+var _kod_giris: LineEdit
+var _kod_tamam: Button
+var _yonerge_kutu: VBoxContainer
+var _kod := ""
 
 var _mod := Mod.GENIS
 var _aciklama_kullanici := [false, false]
@@ -154,6 +168,7 @@ func _ready() -> void:
 	_build_feedback()
 	_build_settings()
 	_build_question()
+	_build_giris()
 
 	get_tree().root.size_changed.connect(_ekran_degisti)
 	Ayarlar.degisti.connect(_ayarlar_degisti)
@@ -189,6 +204,11 @@ func _dpi() -> float:
 	for a in OS.get_cmdline_user_args():
 		if a.begins_with("--arayuz-dpi="):
 			return a.trim_prefix("--arayuz-dpi=").to_float()
+	# macOS fiziksel DPI'yi verir (Retina ~257); sistem ve tarayici ise 2.0x
+	# kullanir. Web'deki gibi (96 x devicePixelRatio) olcekten hesapla, yoksa
+	# arayuz Mac'te web surumunden %34 buyuk cikar.
+	if OS.has_feature("macos"):
+		return 96.0 * DisplayServer.screen_get_scale()
 	var d := float(DisplayServer.screen_get_dpi())
 	return d if d > 0.0 else 96.0
 
@@ -728,6 +748,8 @@ func _build_choice_panel() -> void:
 
 	_secim_baslik = _sarmali(_label(Ayarlar.metin("secim_basligi"), 22, ACCENT))
 	_secim_icerik.add_child(_secim_baslik)
+	# Ana soru ustteki soru seridinde hep gorunuyor; burada tekrar etme.
+	_secim_baslik.visible = false
 
 	_secim_ipucu = _sarmali(_label(Ayarlar.metin("secim_ipucu"), 16, MUTED))
 	_secim_icerik.add_child(_secim_ipucu)
@@ -748,14 +770,18 @@ func _build_choice_panel() -> void:
 		_secim_dugmeleri.append(b)
 
 
+## SORU SERIDI (eski geri bildirim paneli): ekranin ustunde, ortada. Ana
+## soru, secilen sik ve kosu sonunda sikkin sorusu burada; hep gorunur ve
+## tiklamayi yutmaz (Sifirla / Baslat her zaman basilabilir).
 func _build_feedback() -> void:
-	var p := _panel(Color(0.09, 0.10, 0.14, 0.93))
+	var p: PanelContainer = _gecirgen(_panel(Color(0.09, 0.10, 0.14, 0.88)))
 	p.visible = false
 	_kok.add_child(p)
 
-	_geri_kaydir = _kaydirma()
+	_geri_kaydir = _gecirgen(_kaydirma())
 	p.add_child(_geri_kaydir)
 	_feedback = RichTextLabel.new()
+	_feedback.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_feedback.bbcode_enabled = true
 	_feedback.fit_content = true
 	_feedback.scroll_active = false
@@ -907,8 +933,9 @@ func _yerlestir() -> void:
 	# (baslik + birakilma yuksekligi) o an en az gerekli alan.
 	var kontrol_gercek := maxf(kontrol_w, _kontrol_panel.get_combined_minimum_size().x)
 	var geri_yan_w := w - 2.0 * KENAR - kontrol_gercek - BOSLUK
-	_geri_ustte = not genis or geri_yan_w < 320.0
-	_feedback_panel.custom_minimum_size.x = w - 2.0 * KENAR if _geri_ustte else minf(GERI_GEN, geri_yan_w)
+	# Soru seridi her zaman ustte, ortada (toplari ve oklari kapatmasin)
+	_geri_ustte = true
+	_feedback_panel.custom_minimum_size.x = minf(GERI_GEN, w - 2.0 * KENAR)
 
 	# secim paneli: ortada, ekrana sigar
 	var secim_w := minf(SECIM_GEN, w - 2.0 * KENAR)
@@ -923,6 +950,7 @@ func _yerlestir() -> void:
 	_gelistirici_izgara.columns = 2 if iki_sutun else 1
 	_soru_icerik.custom_minimum_size.x = minf(SORU_GEN, w - 2.0 * KENAR) - 2.0 * ic - 12.0
 	_soru_giris.custom_minimum_size.y = clampf(h * 0.22, 72.0, 160.0)
+	_giris_icerik.custom_minimum_size.x = minf(SORU_GEN, w - 2.0 * KENAR) - 2.0 * ic - 12.0
 
 	_yerlesim_sayac += 1
 	var sayac := _yerlesim_sayac
@@ -957,6 +985,14 @@ func _sinirla(w: float, h: float) -> void:
 	_soru_panel.reset_size()
 	_soru_panel.position = ((Vector2(w, h) - _soru_panel.size) * 0.5).max(Vector2.ZERO)
 
+	# Acilis penceresi (modal)
+	var giris_kaydir := _giris_icerik.get_parent() as ScrollContainer
+	giris_kaydir.custom_minimum_size = Vector2(
+		_giris_icerik.custom_minimum_size.x,
+		minf(_giris_icerik.get_combined_minimum_size().y, maxf(h - 2.0 * KENAR - 2.0 * ic, 80.0)))
+	_giris_panel.reset_size()
+	_giris_panel.position = ((Vector2(w, h) - _giris_panel.size) * 0.5).max(Vector2.ZERO)
+
 	_alt.reset_size()
 	_alt.size.x = w - 2.0 * KENAR
 	_alt.position = Vector2(KENAR, h - KENAR - _alt.get_combined_minimum_size().y)
@@ -966,17 +1002,24 @@ func _sinirla(w: float, h: float) -> void:
 	_geri_kaydir.custom_minimum_size.y = minf(_feedback.get_combined_minimum_size().y, maxf(geri_max, 96.0))
 	_feedback_panel.reset_size()
 	if _geri_ustte:
-		_feedback_panel.position = Vector2(KENAR, KENAR * 0.5)
+		_feedback_panel.position = Vector2((w - _feedback_panel.size.x) * 0.5, KENAR * 0.5)
 	else:
 		_feedback_panel.position = Vector2(w - KENAR, h - KENAR) - _feedback_panel.size
 
 	# Secim paneli
 	var secim_max := h - 2.0 * KENAR - 2.0 * ic
+	if _feedback_panel.visible:
+		secim_max -= _feedback_panel.position.y + _feedback_panel.size.y
 	_secim_kaydir.custom_minimum_size = Vector2(
 		_secim_icerik.custom_minimum_size.x,
 		minf(_secim_icerik.get_combined_minimum_size().y, secim_max))
 	_choice_panel.reset_size()
 	_choice_panel.position = (Vector2(w, h) - _choice_panel.size) * 0.5
+	# ustteki soru seridinin altinda kalsin (ana soru orada okunuyor)
+	if _feedback_panel.visible:
+		var ust_y := _feedback_panel.position.y + _feedback_panel.size.y + BOSLUK
+		_choice_panel.position.y = clampf(maxf(_choice_panel.position.y, ust_y),
+			0.0, maxf(h - _choice_panel.size.y, 0.0))
 
 
 func _sahne_payini_bildir(w: float, h: float, yan_w: float) -> void:
@@ -984,10 +1027,13 @@ func _sahne_payini_bildir(w: float, h: float, yan_w: float) -> void:
 	var ust := (serbest + 4.0) / h if _baslik_kutu.visible else 0.0
 	if _feedback_panel.visible and _geri_ustte:
 		serbest = maxf(serbest, _feedback_panel.get_global_rect().end.y)
+		# kamera toplari soru seridinin altina sigdirsin
+		ust = maxf(ust, (_feedback_panel.get_global_rect().end.y + 4.0) / h)
 	ust_serbest_degisti.emit(serbest + 8.0)
 	if not _yan_satir.visible:
-		# yalniz alttaki kontrol cubugu kalir; dikeyde tam genislik
-		var alt0 := (h - _alt.get_global_rect().position.y + 4.0) / h if _mod == Mod.DIKEY else 0.0
+		# yalniz alttaki kontrol cubugu kalir: zemindeki toplar ve oklar onun
+		# arkasinda kalmasin diye her modda kamera onun ustune sigdirilir
+		var alt0 := (h - _alt.get_global_rect().position.y + 4.0) / h
 		sahne_payi_degisti.emit(0.0, 0.0, ust, alt0)
 	elif _mod == Mod.DIKEY:
 		var alt := (h - _yan_satir.get_global_rect().position.y + 4.0) / h
@@ -1029,13 +1075,14 @@ func show_choice(show_it: bool) -> void:
 
 ## Ayarlar ya da soru penceresi acik mi? (main.gd klavye kisayollarini yutar)
 func modal_acik() -> bool:
-	return _ayar_katman.visible or _soru_katman.visible
+	return _ayar_katman.visible or _soru_katman.visible or _giris_katman.visible
 
 
 ## Referanssiz mod: soldaki (dogru fizik) panel ve secim ipucu.
 func referans_goster(goster: bool) -> void:
 	_yan[0]["panel"].visible = goster
 	_secim_ipucu.text = Ayarlar.metin("secim_ipucu" if goster else "secim_ipucu_referanssiz")
+	_secim_ipucu.visible = _secim_ipucu.text != ""
 	_yerlestir()
 
 
@@ -1064,6 +1111,108 @@ func gorunum_ayarla(ust_yazilar: bool, durum_panelleri: bool) -> void:
 	_baslik_kutu.visible = ust_yazilar
 	_yan_satir.visible = durum_panelleri
 	_yerlestir()
+
+
+## Ustteki soru seridi. soru: ana soru; secim: secilen sikkin metni (bos:
+## henuz secilmedi); son_soru: kosu sonunda sikkin sorusu; ipucu: altinda
+## kucuk yazi. Hepsi config/secenekler.tres'ten gelir.
+func soru_seridi(soru: String, secim: String = "", son_soru: String = "", ipucu: String = "") -> void:
+	var t := "[color=#%s][b]%s[/b][/color]" % [ACCENT.to_html(false), soru]
+	if secim != "":
+		t += "\n[color=#%s]Seçiminiz:[/color] %s" % [MUTED.to_html(false), secim]
+	if son_soru != "":
+		t += "\n\n[b]%s[/b]" % son_soru
+		if ipucu != "":
+			t += "\n[color=#%s]%s[/color]" % [MUTED.to_html(false), ipucu]
+	show_feedback(t)
+
+
+## Acilis: once katilimci kodu, sonra kullanim yonergesi (secenekler.tres →
+## Giriş). Ikisi de kapaliysa hemen giris_tamam yayar. Sifirla'da tekrar
+## gosterilmez — oturum basina bir kez.
+func giris_baslat() -> void:
+	if bool(Ayarlar.veri.get("kod_iste", true)):
+		_giris_goster(true)
+	elif bool(Ayarlar.veri.get("yonerge_goster", true)) and Ayarlar.metin("yonerge") != "":
+		_giris_goster(false)
+	else:
+		giris_tamam.emit("")
+
+
+func _giris_goster(kod_ekrani: bool) -> void:
+	_kod_kutu.visible = kod_ekrani
+	_yonerge_kutu.visible = not kod_ekrani
+	_giris_katman.visible = true
+	_yerlestir()
+	if kod_ekrani:
+		_kod_giris.grab_focus.call_deferred()
+
+
+func _kod_onayla() -> void:
+	_kod = _kod_giris.text.strip_edges()
+	if _kod == "":
+		return
+	if bool(Ayarlar.veri.get("yonerge_goster", true)) and Ayarlar.metin("yonerge") != "":
+		_giris_goster(false)
+	else:
+		_giris_bitir()
+
+
+func _giris_bitir() -> void:
+	_giris_katman.visible = false
+	giris_tamam.emit(_kod)
+
+
+func _build_giris() -> void:
+	var m := _modal_katman(GIRIS_KATMANI)
+	_giris_katman = m[0]
+	_giris_panel = m[2]
+
+	var kaydir := _kaydirma()
+	_giris_panel.add_child(kaydir)
+	_giris_icerik = VBoxContainer.new()
+	_giris_icerik.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	kaydir.add_child(_giris_icerik)
+
+	# 1) katilimci kodu: bos kodla gecilmez
+	_kod_kutu = VBoxContainer.new()
+	_kod_kutu.add_theme_constant_override("separation", 12)
+	_giris_icerik.add_child(_kod_kutu)
+	_kod_kutu.add_child(_label(Ayarlar.metin("kod_basligi", "Katılımcı Kodu"), 22, ACCENT))
+	var aciklama := Ayarlar.metin("kod_aciklamasi")
+	if aciklama != "":
+		_kod_kutu.add_child(_sarmali(_label(aciklama, 16, MUTED)))
+	_kod_giris = LineEdit.new()
+	_kod_giris.placeholder_text = "Kod"
+	_kod_giris.max_length = 40
+	_kod_giris.custom_minimum_size = Vector2(0, DOKUN)
+	_boyut(_kod_giris, "font_size", 19)
+	_kod_giris.text_changed.connect(func(t: String): _kod_tamam.disabled = t.strip_edges() == "")
+	_kod_giris.text_submitted.connect(func(_t: String): _kod_onayla())
+	_kod_kutu.add_child(_kod_giris)
+	_kod_tamam = _dugme("Tamam", _kod_onayla)
+	_kod_tamam.disabled = true
+	_kod_kutu.add_child(_kod_tamam)
+	_satir_dugmeleri.append(_kod_tamam)
+
+	# 2) kullanim yonergesi
+	_yonerge_kutu = VBoxContainer.new()
+	_yonerge_kutu.add_theme_constant_override("separation", 14)
+	_yonerge_kutu.visible = false
+	_giris_icerik.add_child(_yonerge_kutu)
+	var y := RichTextLabel.new()
+	y.bbcode_enabled = true
+	y.fit_content = true
+	y.scroll_active = false
+	y.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	y.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	y.text = Ayarlar.metin("yonerge")
+	_boyut(y, "normal_font_size", 17)
+	_boyut(y, "bold_font_size", 17)
+	_yonerge_kutu.add_child(y)
+	var devam := _dugme(Ayarlar.metin("devam_dugmesi", "Devam Et"), _giris_bitir)
+	_yonerge_kutu.add_child(devam)
+	_satir_dugmeleri.append(devam)
 
 
 func show_feedback(bbcode: String) -> void:

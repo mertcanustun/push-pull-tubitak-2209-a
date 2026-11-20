@@ -23,7 +23,11 @@ const KADRAJ_PAYI := -0.4        # m — top kadrajın biraz üstünde dursun
 var durum: int = Durum.BOS
 
 var _cfg: Sim2Config
+## Su an yonetilen kamera ve ana pozu. Normalde ana kamera; bolunmus ekranda
+## (start_follow'a kamera verilince) sag yarinin kamerasi.
 var _cam: Camera3D
+var _ana_cam: Camera3D
+var _ana_base: Transform3D
 var _is_running: Callable
 var _base: Transform3D
 var _from: Transform3D
@@ -38,8 +42,10 @@ var _label: Label
 func setup(cfg: Sim2Config, cam: Camera3D, is_running: Callable) -> void:
 	_cfg = cfg
 	_cam = cam
+	_ana_cam = cam
 	_is_running = is_running
 	_base = cam.global_transform
+	_ana_base = _base
 	_layer = CanvasLayer.new()
 	_layer.layer = 5
 	add_child(_layer)
@@ -67,6 +73,9 @@ func etiket_ust_ayarla(y: float) -> void:
 ## Ana kamera pozu degisti (referanssiz modda kamera tek topu ortalar).
 ## Takip/donus surerken kamerayi kendisi yonettigi icin yalnizca BOS'ta oturtur.
 func taban_ayarla(t: Transform3D) -> void:
+	_ana_base = t
+	if _cam != _ana_cam:
+		return   # bolunmus ekranda takip ayri kamerada; ana kamera main.gd'de
 	_base = t
 	if durum == Durum.BOS and _cam:
 		_cam.global_transform = t
@@ -81,7 +90,14 @@ func is_active() -> bool:
 
 ## Top ekrandan çıktığı anda main.gd çağırır. cetvel: yükseklik cetveli
 ## kurulsun mu (Main/Performans → b_cetveli).
-func start_follow(ball: Node3D, cetvel: bool = true) -> void:
+## kamera / taban: bolunmus ekranda takibi bu kamera yapar (ana kamera
+## olduğu yerde kalır); verilmezse ana kamera.
+func start_follow(ball: Node3D, cetvel: bool = true, kamera: Camera3D = null,
+		taban: Transform3D = Transform3D()) -> void:
+	if kamera:
+		_cam = kamera
+		_base = taban
+		_cam.global_transform = taban
 	_ball = ball
 	_t = 0.0
 	_max_cam_y = 0.0
@@ -116,6 +132,7 @@ func reset() -> void:
 	_ball = null
 	if _cam:
 		_cam.global_transform = _base
+	_ana_kameraya_don()
 	_clear_markers()
 	if _label:
 		_label.visible = false
@@ -161,8 +178,14 @@ func _process(delta: float) -> void:
 				# son karede BİREBİR ana kamera pozu (yuvarlama kalıntısı olmasın)
 				_cam.global_transform = _base
 				durum = Durum.BOS
+				_ana_kameraya_don()
 				_clear_markers()
 				_label.visible = false
+
+
+func _ana_kameraya_don() -> void:
+	_cam = _ana_cam
+	_base = _ana_base
 
 
 ## Ölçüm/test için: takip boyunca kameranın çıktığı en yüksek konum.

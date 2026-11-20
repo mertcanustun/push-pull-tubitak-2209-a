@@ -10,10 +10,11 @@ extends Node
 ## yerel CSV (Ayarlar.cevap_kaydet) her durumda yazılmaya devam eder.
 ##
 ## KATILIMCI KODU: açılıştaki kod ekranından gelen kod (kod_ayarla) oturum
-## kimliğinin başına yazılır: "K12-18c3f…". Sunucu (api/log.js) yalnızca
-## bilinen alanları sakladığı için ayrı bir "kod" sütunu yerine bu yol
-## seçildi; CSV'de oturum sütunu kodla başlar. Kod girilene kadar hiçbir
-## olay gönderilmez (kuyrukta bekler).
+## kimliğinin başına yazılır ("K12-18c3f…") VE her olayda ayrı "kod" alanı
+## olarak gönderilir. Sunucu (Vercel deposu api/log.js) yalnızca bildiği
+## alanları saklar: "kod" ALANLAR'a ve api/export.js SUTUNLAR'a eklenince
+## CSV'de ayrı sütun olur; eklenmeden de kod oturum sütununda görünür.
+## Kod girilene kadar hiçbir olay gönderilmez (kuyrukta bekler).
 ##
 ## Gönderilemeyen olay kuyrukta kalır ve YENIDEN_DENEME saniye sonra tekrar
 ## denenir; oyun hiçbir zaman beklemez.
@@ -32,6 +33,7 @@ var _istek: HTTPRequest
 var _mesgul := false
 ## Kod girildi mi (kod_ayarla çağrıldı mı). Öncesindeki olaylar bekler.
 var _hazir := false
+var _kod := ""
 
 
 func _ready() -> void:
@@ -52,10 +54,12 @@ func kod_ayarla(kod: String) -> void:
 		return
 	_hazir = true
 	kod = kod.strip_edges().replace(",", " ").left(40)
+	_kod = kod
 	if kod != "":
 		_oturum = "%s-%s" % [kod, _oturum]
 	for d in _kuyruk:
 		d["oturum"] = _oturum
+		d["kod"] = _kod
 	olay("oturum_basladi")
 
 
@@ -76,6 +80,7 @@ func olay(ad: String, alanlar: Dictionary = {}) -> void:
 	var d := alanlar.duplicate()
 	d["olay"] = ad
 	d["oturum"] = _oturum
+	d["kod"] = _kod
 	d["mod"] = "referanssiz" if Ayarlar.referanssiz() else "referansli"
 	d["istemci_zamani"] = Time.get_datetime_string_from_system(false, true)
 	if _kuyruk.size() >= MAKS_KUYRUK:

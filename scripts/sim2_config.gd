@@ -126,6 +126,11 @@ enum EnYuksek { CANLI, SON_REKOR, GIZLI }
 ## Okların yanında kuvvet büyüklüğü ("Fg 6.1 N"). Kapalıyken yalnız ad
 ## ("Fg") yazar. Anında işler.
 @export var ok_degerleri: bool = false
+## Seçimden sonra soru şeridinin alt kenarında ince ilerleme çubuğu: koşu
+## süresi (yukarıda "kosu_sonu_bekleme") boyunca dolar, dolunca son soru
+## çıkar. Dört şıkta da aynı (yalnız c/d'de olsa ipucu verirdi). Duraklatınca
+## durur. Anında işler.
+@export var ilerleme_cubugu: bool = true
 
 @export_group("(b) gösterimi")
 ## (b)'de top ~1200 m/s ile fırlar: 9 m'ye (ekrandan çıkış) 11 ms'de varır,

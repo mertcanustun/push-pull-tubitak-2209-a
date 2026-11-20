@@ -290,7 +290,12 @@ func _bolunmus_kur() -> void:
 	_sag_kamera.keep_aspect = Camera3D.KEEP_HEIGHT
 	_sag_kamera.near = camera.near
 	_sag_kamera.far = camera.far
-	_sag_kamera.environment = camera.environment
+	# kendi ortam kopyasi: Gokyuzu gecisi yalniz sag yariyi boyasin
+	var we := get_node_or_null(^"WorldEnvironment") as WorldEnvironment
+	if camera.environment:
+		_sag_kamera.environment = camera.environment.duplicate()
+	elif we and we.environment:
+		_sag_kamera.environment = we.environment.duplicate()
 	_sag_kamera.attributes = camera.attributes
 	_bolum_vp.add_child(_sag_kamera)
 	_bolum_cizgi = ColorRect.new()
@@ -327,6 +332,7 @@ func _bolunmus_ac() -> void:
 	_bolunmus = true
 	_bolum_katman.visible = true
 	_bolum_vp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+	_gokyuzu_hedef(true)
 	_kamerayi_uydur()
 	_bolunmus_yerlestir()
 
@@ -337,7 +343,21 @@ func _bolunmus_kapat() -> void:
 	_bolunmus = false
 	_bolum_katman.visible = false
 	_bolum_vp.render_target_update_mode = SubViewport.UPDATE_DISABLED   # kapaliyken cizme
+	_gokyuzu_hedef(false)
 	_kamerayi_uydur()
+
+
+## Gokyuzu gecisini bolunmus ekranda sag kameraya, kapaninca ana kameraya baglar.
+func _gokyuzu_hedef(sag: bool) -> void:
+	var g := get_node_or_null(^"Gokyuzu") as Gokyuzu
+	if g == null:
+		return
+	if sag and _sag_kamera.environment:
+		g.hedef_ayarla(_sag_kamera, _sag_kamera.environment)
+	else:
+		var we := get_node_or_null(^"WorldEnvironment") as WorldEnvironment
+		var env: Environment = camera.environment if camera.environment else (we.environment if we else null)
+		g.hedef_ayarla(camera, env)
 
 
 
@@ -426,6 +446,11 @@ func _exit_tree() -> void:
 # ------------------------------------------------------------------- akis
 
 func reset_sim() -> void:
+	# Son soru cikmadan Sifirla: kac saniye izledigiyle kayda gecer
+	# (cubuga ragmen erken sifirlayan var mi, CSV'de gorulsun).
+	if phase == Phase.RESOLVED and not _kosu_bitti and choice != "":
+		Kayit.olay("erken_sifirlama", {"secenek": choice,
+			"sure": "%.1f" % _kosu_sure, "sure_hedef": "%.1f" % cfg.kosu_sonu_bekleme})
 	# cfg Inspector/Remote'tan degismis olabilir: spec'leri tazele, sonra
 	# backend kendini (ve Godot Melez'de RigidBody alanlarini) bunlardan kurar.
 	for id in backend.body_ids():
@@ -488,6 +513,7 @@ func _on_start() -> void:
 		phase = Phase.FALLING
 	running = not running
 	hud.set_start_text("Duraklat" if running else "Devam")
+	_tik_guncelle()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -541,6 +567,11 @@ func _process(dt: float) -> void:
 		# cekimi surse bile).
 		if _kosu_sure >= cfg.kosu_sonu_bekleme:
 			_kosu_sonu()
+	# kosu ilerleme cubugu: secimden son soruya kadar; duraklatinca durur
+	var oran := -1.0
+	if cfg.ilerleme_cubugu and phase == Phase.RESOLVED and not _kosu_bitti:
+		oran = clampf(_kosu_sure / maxf(cfg.kosu_sonu_bekleme, 0.01), 0.0, 1.0)
+	hud.ilerleme_ayarla(oran)
 
 
 func _physics_process(delta: float) -> void:
@@ -577,13 +608,25 @@ func _physics_process_engine(delta: float) -> void:
 		_after_step(delta)
 	# secim ekraninda / duraklatilinca fizik ilerlemiyor: saniyede 2400 bos
 	# adim atilmasin
+	_tik_guncelle()
+	backend.set_running(running and phase != Phase.CHOICE)
+
+
+## Motor tik sayisi ve zaman olcegi. Fizik ilerlemiyorken (secim ekrani,
+## duraklatma) tikler artirilmaz; ama ilerleme BASLADIGI anda (secim yapildi,
+## Devam'a basildi) ilk adimdan once cagrilmali: top secim ekraninda temasin
+## ortasinda donuyor, ilk adim 120 Hz'te atilirsa temas tek adimda cozulur ve
+## top enerji kazanip fırlar (web'de soldaki top 60 m'ye cikiyordu).
+func _tik_guncelle() -> void:
+	if not backend or not backend.engine_driven():
+		return
+	var advancing := running and phase != Phase.CHOICE
 	var n := _alt_bolme() if advancing else 1
 	Engine.time_scale = user_speed * _gorunen_hiz()
 	var tik: int = cfg.godot_tik_sayisi * n
 	if Engine.physics_ticks_per_second != tik:
 		Engine.physics_ticks_per_second = tik
 		Engine.max_physics_steps_per_frame = maxi(8, ceili(tik / 50.0))
-	backend.set_running(running and phase != Phase.CHOICE)
 
 
 ## Ekranda zamanin akis hizi (kullanici hiz kaydiricisi haric). Temas agir
@@ -858,6 +901,7 @@ func _on_choice(c: String) -> void:
 				or _b_mode == Sim2Config.BGosterim.IKISI:
 			_launch_slow = true
 			_launch_elapsed = 0.0
+	_tik_guncelle()   # ilk adim kucuk tikle atilsin (bkz. _tik_guncelle)
 
 
 func _apply_choice_force(sr: PhysicsBackend.BodyState) -> void:

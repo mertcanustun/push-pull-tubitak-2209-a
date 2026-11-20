@@ -91,6 +91,9 @@ var _right_readout: RichTextLabel
 var _status: Label
 var _feedback: RichTextLabel
 var _feedback_panel: PanelContainer
+var _ilerleme_iz: ColorRect     # soru seridinin altindaki cubuk (zemin)
+var _ilerleme_dolu: ColorRect   # dolan kisim
+var _ilerleme_oran := -1.0      # < 0: gizli
 var _choice_panel: PanelContainer
 var _start_btn: Button
 var _backend_label: Label
@@ -790,6 +793,16 @@ func _build_feedback() -> void:
 	_geri_kaydir.add_child(_feedback)
 	_feedback_panel = p
 
+	_ilerleme_iz = ColorRect.new()
+	_ilerleme_iz.color = Color(1, 1, 1, 0.10)
+	_ilerleme_iz.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ilerleme_iz.visible = false
+	_kok.add_child(_ilerleme_iz)
+	_ilerleme_dolu = ColorRect.new()
+	_ilerleme_dolu.color = ACCENT
+	_ilerleme_dolu.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_ilerleme_iz.add_child(_ilerleme_dolu)
+
 
 func _build_question() -> void:
 	var m := _modal_katman(SORU_KATMANI)
@@ -1005,6 +1018,7 @@ func _sinirla(w: float, h: float) -> void:
 		_feedback_panel.position = Vector2((w - _feedback_panel.size.x) * 0.5, KENAR * 0.5)
 	else:
 		_feedback_panel.position = Vector2(w - KENAR, h - KENAR) - _feedback_panel.size
+	_ilerleme_yerlestir()
 
 	# Secim paneli
 	var secim_max := h - 2.0 * KENAR - 2.0 * ic
@@ -1213,6 +1227,32 @@ func _build_giris() -> void:
 	var devam := _dugme(Ayarlar.metin("devam_dugmesi", "Devam Et"), _giris_bitir)
 	_yonerge_kutu.add_child(devam)
 	_satir_dugmeleri.append(devam)
+
+
+## Kosu ilerleme cubugu (Sim2Config → Görünüm → ilerleme_cubugu). oran 0–1;
+## negatif: gizli. main.gd her kare cagirir.
+func ilerleme_ayarla(oran: float) -> void:
+	if is_equal_approx(oran, _ilerleme_oran):
+		return
+	_ilerleme_oran = oran
+	_ilerleme_yerlestir()
+
+
+## Cubuk soru seridinin alt kenarina, yuvarlak koselerin icine yapisik.
+func _ilerleme_yerlestir() -> void:
+	if _ilerleme_iz == null:
+		return
+	var gor := _ilerleme_oran >= 0.0 and _feedback_panel.visible
+	_ilerleme_iz.visible = gor
+	if not gor:
+		return
+	const KALINLIK := 3.0
+	const ICERI := 10.0
+	var r := _feedback_panel.get_rect()
+	_ilerleme_iz.position = Vector2(r.position.x + ICERI, r.end.y - KALINLIK - 1.0)
+	_ilerleme_iz.size = Vector2(maxf(r.size.x - 2.0 * ICERI, 0.0), KALINLIK)
+	_ilerleme_dolu.position = Vector2.ZERO
+	_ilerleme_dolu.size = Vector2(_ilerleme_iz.size.x * clampf(_ilerleme_oran, 0.0, 1.0), KALINLIK)
 
 
 func show_feedback(bbcode: String) -> void:

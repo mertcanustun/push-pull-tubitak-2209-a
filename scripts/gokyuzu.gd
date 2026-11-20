@@ -45,6 +45,10 @@ var etkin := true:
 		if is_node_ready():
 			_uygula(_ilerleme() if v else 0.0)
 
+## Yıldız küresinin görsel katmanı: yalnız geçişin izlediği kamera görür
+## (bölünmüş ekranda sol yarının tavanında yıldız çıkmasın).
+const YILDIZ_KATMANI := 1 << 19
+
 var _kamera: Camera3D
 var _env: Environment
 var _taban_renk: Color
@@ -81,6 +85,8 @@ func _ready() -> void:
 	_yildiz.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_yildiz.extra_cull_margin = 16384.0
 	_yildiz.visible = false
+	_yildiz.layers = YILDIZ_KATMANI
+	_kamera.cull_mask |= YILDIZ_KATMANI
 	_kamera.add_child(_yildiz)
 	_uygula(0.0)
 
@@ -116,6 +122,25 @@ func _uygula(t: float) -> void:
 	var y := clampf((t - yildiz_baslangici) / maxf(yildiz_tam - yildiz_baslangici, 0.01), 0.0, 1.0)
 	_mat.set_shader_parameter("yogunluk", y * yildiz_parlakligi)
 	_yildiz.visible = y > 0.001
+
+
+## Geçişin izlediği kamerayı ve boyadığı ortamı değiştirir. Bölünmüş ekranda
+## (b) sağ yarının kamerası yükselir; geçiş onun kendi ortam kopyasına uygulanır,
+## sol yarı salon görünümünde kalır. Kapanınca main.gd ana kameraya geri verir.
+func hedef_ayarla(kamera: Camera3D, env: Environment) -> void:
+	if _env == null or kamera == null or env == null:
+		return
+	if kamera == _kamera and env == _env:
+		return
+	_uygula(0.0)   # eski hedef salon haline dönsün
+	_kamera.cull_mask &= ~YILDIZ_KATMANI
+	kamera.cull_mask |= YILDIZ_KATMANI
+	_kamera = kamera
+	_env = env
+	_yildiz.reparent(kamera, false)
+	_son_t = -1.0
+	if etkin:
+		_uygula(_ilerleme())
 
 
 ## Ölçüm/test: şu anki geçiş ilerlemesi (0 = salon, 1 = uzay).
